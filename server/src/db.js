@@ -102,6 +102,11 @@ export const statements = {
       mtime_ms,
       source,
       favorite,
+      ocr_text,
+      ocr_status,
+      ocr_error,
+      ocr_updated_at,
+      ocr_mtime_ms,
       created_at,
       updated_at
     ) VALUES (
@@ -128,6 +133,11 @@ export const statements = {
       @mtime_ms,
       @source,
       @favorite,
+      @ocr_text,
+      @ocr_status,
+      @ocr_error,
+      @ocr_updated_at,
+      @ocr_mtime_ms,
       @created_at,
       @updated_at
     )
@@ -143,14 +153,34 @@ export const statements = {
         WHEN maps.title IS NULL OR maps.title = '' THEN excluded.title
         ELSE maps.title
       END,
-      scope_level = COALESCE(maps.scope_level, excluded.scope_level),
-      country_code = COALESCE(maps.country_code, excluded.country_code),
-      country_name = COALESCE(maps.country_name, excluded.country_name),
-      province = COALESCE(maps.province, excluded.province),
-      city = COALESCE(maps.city, excluded.city),
-      district = COALESCE(maps.district, excluded.district),
+      scope_level = COALESCE(NULLIF(maps.scope_level, ''), excluded.scope_level),
+      country_code = COALESCE(NULLIF(maps.country_code, ''), excluded.country_code),
+      country_name = COALESCE(NULLIF(maps.country_name, ''), excluded.country_name),
+      province = COALESCE(NULLIF(maps.province, ''), excluded.province),
+      city = COALESCE(NULLIF(maps.city, ''), excluded.city),
+      district = COALESCE(NULLIF(maps.district, ''), excluded.district),
       latitude = COALESCE(maps.latitude, excluded.latitude),
       longitude = COALESCE(maps.longitude, excluded.longitude),
+      ocr_text = CASE
+        WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_text
+        ELSE COALESCE(excluded.ocr_text, maps.ocr_text)
+      END,
+      ocr_status = CASE
+        WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_status
+        ELSE COALESCE(excluded.ocr_status, maps.ocr_status)
+      END,
+      ocr_error = CASE
+        WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_error
+        ELSE COALESCE(excluded.ocr_error, maps.ocr_error)
+      END,
+      ocr_updated_at = CASE
+        WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_updated_at
+        ELSE COALESCE(excluded.ocr_updated_at, maps.ocr_updated_at)
+      END,
+      ocr_mtime_ms = CASE
+        WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_mtime_ms
+        ELSE COALESCE(excluded.ocr_mtime_ms, maps.ocr_mtime_ms)
+      END,
       updated_at = excluded.updated_at
   `),
   findById: db.prepare('SELECT * FROM maps WHERE id = ?'),

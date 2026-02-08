@@ -23,7 +23,8 @@ export const config = {
   webdav: {
     url: process.env.WEBDAV_URL,
     username: process.env.WEBDAV_USER,
-    password: process.env.WEBDAV_PASS
+    password: process.env.WEBDAV_PASS,
+    rootPath: process.env.WEBDAV_ROOT_PATH || '/'
   },
   webDistDir: process.env.WEB_DIST_DIR || path.resolve(rootDir, 'web', 'dist')
 };

@@ -8,7 +8,7 @@ import { logger } from './logger.js';
 import apiRoutes from './routes.js';
 import { scanLibrary } from './library.js';
 import { startWatcher } from './watcher.js';
-import { getMapLibraryDir } from './runtime-settings.js';
+import { getMapLibraryDir, getStorageDriver, getWebdavSettings } from './runtime-settings.js';
 import { initOcrService, queueOcrForCandidates } from './ocr.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,10 +37,14 @@ const start = async () => {
   }
 
   const mapLibraryDir = getMapLibraryDir();
-  const shouldScan = config.storageDriver === 'webdav' || Boolean(mapLibraryDir);
+  const storageDriver = getStorageDriver();
+  const webdavSettings = getWebdavSettings(true);
+  const shouldScan = storageDriver === 'webdav'
+    ? Boolean(webdavSettings.url)
+    : Boolean(mapLibraryDir);
 
   if (!shouldScan) {
-    logger.warn('尚未选择本地地图目录，可在网页端设置后再扫描。');
+    logger.warn('尚未配置有效存储目录，可在网页端设置后再扫描。');
   } else {
     try {
       await scanLibrary();
@@ -51,7 +55,7 @@ const start = async () => {
     }
   }
 
-  if (config.watchLibrary) {
+  if (config.watchLibrary && storageDriver === 'local') {
     startWatcher();
   }
 

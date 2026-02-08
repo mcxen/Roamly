@@ -30,6 +30,16 @@ export const api = {
       body: JSON.stringify({ force, limit })
     }));
   },
+  async storageSettings() {
+    return handle(await fetch('/api/storage/settings'));
+  },
+  async saveStorageSettings(payload) {
+    return handle(await fetch('/api/storage/settings', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
   async listMaps(params) {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => {
@@ -93,6 +103,9 @@ export const api = {
   async listLocalFolders(depth = 6) {
     return handle(await fetch(`/api/storage/local/folders?depth=${encodeURIComponent(depth)}`));
   },
+  async listWebdavFolders(depth = 6) {
+    return handle(await fetch(`/api/storage/webdav/folders?depth=${encodeURIComponent(depth)}`));
+  },
   async chinaDistribution(source) {
     const query = source ? `?source=${encodeURIComponent(source)}` : '';
     return handle(await fetch(`/api/maps/china-distribution${query}`));
@@ -100,5 +113,12 @@ export const api = {
   async browseLocal(pathValue) {
     const query = pathValue ? `?path=${encodeURIComponent(pathValue)}` : '';
     return handle(await fetch(`/api/storage/local/browse${query}`));
+  },
+  async resolveCity(q) {
+    const query = q ? `?q=${encodeURIComponent(q)}` : '';
+    return handle(await fetch(`/api/locations/resolve-city${query}`));
+  },
+  async chinaCities() {
+    return handle(await fetch('/api/locations/china-cities'));
   }
 };

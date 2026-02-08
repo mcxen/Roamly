@@ -9,13 +9,30 @@ import { createClient } from 'webdav';
 import { statements, withTransaction, removeMissingForSource } from './db.js';
 import { findCityCoordinate, matchChinaCityByFilename } from './location-dict.js';
 import { getMapLibraryDir, getStorageDriver, getWebdavSettings } from './runtime-settings.js';
-import { batchMergeProjectMeta, loadProjectMetaSnapshot, pruneProjectMeta } from './project-store.js';
+import {
+  PROJECT_DIR_NAME,
+  PROJECT_FILE_NAME,
+  batchMergeProjectMeta,
+  loadProjectMetaSnapshot,
+  pruneProjectMeta
+} from './project-store.js';
 import { logger } from './logger.js';
 
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff', 'bmp', 'gif'];
+const GLOBAL_BASE_LOCATION = {
+  scope_level: 'international',
+  country_code: 'WORLD',
+  country_name: '全球',
+  province: null,
+  city: null,
+  district: null,
+  latitude: null,
+  longitude: null
+};
 
 const isImageFile = (filePath) => IMAGE_EXTS.includes(path.extname(filePath).slice(1).toLowerCase());
 const hashId = (input) => crypto.createHash('sha1').update(input).digest('hex');
+const nowIso = () => new Date().toISOString();
 
 const normalizeTitle = (fileName) => {
   const base = fileName.replace(/\.[^/.]+$/, '');
@@ -65,16 +82,7 @@ const parseScope = (segment) => {
 const inferByPath = (relativePath) => {
   const segments = normalizeSegments(String(relativePath || '').replace(/\\/g, '/'));
   if (!segments.length) {
-    return {
-      scope_level: null,
-      country_code: null,
-      country_name: null,
-      province: null,
-      city: null,
-      district: null,
-      latitude: null,
-      longitude: null
-    };
+    return { ...GLOBAL_BASE_LOCATION };
   }
 
   const dirSegments = segments.slice(0, -1);
@@ -111,7 +119,7 @@ const inferByPath = (relativePath) => {
   }
 
   const guess = findCityCoordinate({ countryCode, city });
-  return {
+  const inferred = {
     scope_level: scope,
     country_code: countryCode || (guess ? guess.country_code : null),
     country_name: countryName || (guess ? guess.country_name : null),
@@ -121,11 +129,17 @@ const inferByPath = (relativePath) => {
     latitude: guess ? guess.latitude : null,
     longitude: guess ? guess.longitude : null
   };
+
+  if (!inferred.scope_level && !inferred.country_code && !inferred.country_name) {
+    return { ...GLOBAL_BASE_LOCATION };
+  }
+
+  return inferred;
 };
 
 const mergeInferred = (pathInferred, fileNameInferred) => {
   if (!fileNameInferred) return pathInferred;
-  return {
+  const merged = {
     scope_level: pathInferred.scope_level || fileNameInferred.scope_level || null,
     country_code: pathInferred.country_code || fileNameInferred.country_code || null,
     country_name: pathInferred.country_name || fileNameInferred.country_name || null,
@@ -135,6 +149,12 @@ const mergeInferred = (pathInferred, fileNameInferred) => {
     latitude: pathInferred.latitude ?? fileNameInferred.latitude ?? null,
     longitude: pathInferred.longitude ?? fileNameInferred.longitude ?? null
   };
+
+  if (!merged.scope_level && !merged.country_code && !merged.country_name) {
+    return { ...GLOBAL_BASE_LOCATION };
+  }
+
+  return merged;
 };
 
 const ensurePathInsideRoot = (rootDir, targetPath) => {
@@ -254,9 +274,9 @@ const toRowFromProjectMeta = ({
     description: persistedMeta?.description || null,
     tags: persistedTags.length ? JSON.stringify(persistedTags) : null,
     collection_unit: persistedMeta?.collection_unit || null,
-    scope_level: persistedMeta?.scope_level || inferred.scope_level,
-    country_code: persistedMeta?.country_code || inferred.country_code,
-    country_name: persistedMeta?.country_name || inferred.country_name,
+    scope_level: persistedMeta?.scope_level || inferred.scope_level || GLOBAL_BASE_LOCATION.scope_level,
+    country_code: persistedMeta?.country_code || inferred.country_code || GLOBAL_BASE_LOCATION.country_code,
+    country_name: persistedMeta?.country_name || inferred.country_name || GLOBAL_BASE_LOCATION.country_name,
     province: persistedMeta?.province || inferred.province,
     city: persistedMeta?.city || inferred.city,
     district: persistedMeta?.district || inferred.district,
@@ -395,7 +415,7 @@ export const scanLocalLibrary = async () => {
   });
 
   const imageFiles = files.filter(isImageFile);
-  const nowIso = nowIso();
+  const nowIsoValue = nowIso();
   const presentPaths = [];
   const presentRelativePaths = [];
   const projectEntries = [];
@@ -439,7 +459,7 @@ export const scanLocalLibrary = async () => {
         mtimeMs: stat.mtimeMs,
         source: 'local',
         inferred,
-        nowIso,
+        nowIso: nowIsoValue,
         persistedMeta
       });
 
@@ -472,7 +492,7 @@ export const scanWebdavLibrary = async () => {
       return !relative.startsWith(`${PROJECT_DIR_NAME}/`) && relative !== PROJECT_FILE_NAME;
     });
 
-  const nowIso = nowIso();
+  const nowIsoValue = nowIso();
   const presentPaths = [];
   const presentRelativePaths = [];
   const projectEntries = [];
@@ -497,7 +517,7 @@ export const scanWebdavLibrary = async () => {
         mtimeMs: item.lastmod ? new Date(item.lastmod).getTime() : null,
         source: 'webdav',
         inferred,
-        nowIso,
+        nowIso: nowIsoValue,
         persistedMeta
       });
 

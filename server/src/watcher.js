@@ -1,8 +1,7 @@
 import chokidar from 'chokidar';
-import { config } from './config.js';
 import { scanLocalLibrary } from './library.js';
 import { logger } from './logger.js';
-import { getMapLibraryDir } from './runtime-settings.js';
+import { getMapLibraryDir, getStorageDriver } from './runtime-settings.js';
 
 let watcher = null;
 let timer = null;
@@ -18,7 +17,7 @@ const scheduleRescan = () => {
 
 export const startWatcher = () => {
   const mapLibraryDir = getMapLibraryDir();
-  if (config.storageDriver !== 'local' || !mapLibraryDir) {
+  if (getStorageDriver() !== 'local' || !mapLibraryDir) {
     return;
   }
 

@@ -7,8 +7,8 @@ import { config } from './config.js';
 import { logger } from './logger.js';
 import { getStorageDriver, getMapLibraryDir, getWebdavSettings, getProjectKey } from './runtime-settings.js';
 
-const PROJECT_DIR_NAME = '.roamly';
-const PROJECT_FILE_NAME = 'project-data.json';
+export const PROJECT_DIR_NAME = '.roamly';
+export const PROJECT_FILE_NAME = 'project-data.json';
 const CACHE_DIR = path.resolve(config.dataDir, 'projects');
 
 if (!fs.existsSync(CACHE_DIR)) {

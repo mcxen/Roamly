@@ -128,6 +128,29 @@ const aliasMatchers = chinaLocationItems
   .flatMap((item) => item.aliases.map((alias) => ({ alias, item })))
   .sort((a, b) => b.alias.length - a.alias.length);
 
+const provinceAliasMap = new Map();
+for (const item of CHINA_PREFECTURE_CITIES) {
+  const rawProvince = String(item.province || '').trim();
+  const normalizedProvince = removeProvinceSuffix(rawProvince);
+  if (!normalizedProvince) continue;
+
+  const aliases = new Set([
+    rawProvince,
+    normalizedProvince,
+    rawProvince.replace(/维吾尔自治区|壮族自治区|回族自治区|自治区|特别行政区|省|市$/g, '').trim()
+  ]);
+
+  for (const alias of aliases) {
+    const value = String(alias || '').trim();
+    if (!value || value.length < 2) continue;
+    provinceAliasMap.set(value, normalizedProvince);
+  }
+}
+
+const provinceMatchers = Array.from(provinceAliasMap.entries())
+  .map(([alias, province]) => ({ alias, province }))
+  .sort((a, b) => b.alias.length - a.alias.length);
+
 export const matchChinaCityByFilename = (fileName) => {
   const raw = String(fileName || '').replace(/\.[^/.]+$/, '');
   if (!raw) return null;
@@ -148,6 +171,124 @@ export const matchChinaCityByFilename = (fileName) => {
   }
 
   return null;
+};
+
+export const matchChinaCityByText = (text) => {
+  const raw = String(text || '');
+  if (!raw) return null;
+
+  for (const matcher of aliasMatchers) {
+    if (raw.includes(matcher.alias)) {
+      return {
+        scope_level: 'national',
+        country_code: 'CN',
+        country_name: '中国',
+        province: matcher.item.province,
+        city: matcher.item.city,
+        district: null,
+        latitude: matcher.item.latitude,
+        longitude: matcher.item.longitude
+      };
+    }
+  }
+
+  return null;
+};
+
+export const extractChinaRegionMentions = (text) => {
+  const raw = String(text || '');
+  if (!raw) {
+    return {
+      provinces: [],
+      cities: [],
+      hits: []
+    };
+  }
+
+  const provinces = new Set();
+  const cities = new Set();
+  const hitKeys = new Set();
+  const hits = [];
+
+  for (const matcher of provinceMatchers) {
+    if (!raw.includes(matcher.alias)) continue;
+    provinces.add(matcher.province);
+    hitKeys.add(`province:${matcher.province}`);
+    hits.push({
+      type: 'province',
+      name: matcher.province,
+      alias: matcher.alias
+    });
+  }
+
+  for (const matcher of aliasMatchers) {
+    if (!raw.includes(matcher.alias)) continue;
+    const key = `${matcher.item.province}|${matcher.item.city}`;
+    if (!hitKeys.has(`city:${key}`)) {
+      hits.push({
+        type: 'city',
+        province: matcher.item.province,
+        city: matcher.item.city,
+        alias: matcher.alias
+      });
+      hitKeys.add(`city:${key}`);
+    }
+    provinces.add(matcher.item.province);
+    cities.add(matcher.item.city);
+  }
+
+  return {
+    provinces: Array.from(provinces),
+    cities: Array.from(cities),
+    hits
+  };
+};
+
+export const resolveLocationByCityInput = (input) => {
+  const keyword = normalizeCityName(input).toLowerCase();
+  if (!keyword) return null;
+
+  const exact = chinaLocationItems.find((item) => normalizeCityName(item.city).toLowerCase() === keyword);
+  if (exact) {
+    return {
+      country_code: 'CN',
+      country_name: '中国',
+      province: exact.province,
+      city: exact.city,
+      district: null,
+      latitude: exact.latitude,
+      longitude: exact.longitude,
+      scope_level: 'national'
+    };
+  }
+
+  const fuzzy = chinaLocationItems.find((item) => {
+    const city = normalizeCityName(item.city).toLowerCase();
+    return city.includes(keyword) || keyword.includes(city);
+  });
+
+  if (!fuzzy) return null;
+  return {
+    country_code: 'CN',
+    country_name: '中国',
+    province: fuzzy.province,
+    city: fuzzy.city,
+    district: null,
+    latitude: fuzzy.latitude,
+    longitude: fuzzy.longitude,
+    scope_level: 'national'
+  };
+};
+
+export const getChinaCityOptions = () => {
+  return chinaLocationItems.map((item) => ({
+    country_code: 'CN',
+    country_name: '中国',
+    province: item.province,
+    city: item.city,
+    latitude: item.latitude,
+    longitude: item.longitude
+  }));
 };
 
 export const suggestLocations = (q) => {
