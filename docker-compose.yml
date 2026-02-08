@@ -1,0 +1,23 @@
+services:
+  roamly:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: roamly
+    restart: unless-stopped
+    ports:
+      - "4173:4173"
+    environment:
+      PORT: 4173
+      NODE_ENV: production
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      MAP_LIBRARY_DIR: ${MAP_LIBRARY_DIR:-/maps}
+      DB_PATH: /app/server/data/roamly.db
+      WATCH_LIBRARY: "false"
+      WEBDAV_URL: ${WEBDAV_URL:-}
+      WEBDAV_USER: ${WEBDAV_USER:-}
+      WEBDAV_PASS: ${WEBDAV_PASS:-}
+      WEB_DIST_DIR: /app/web/dist
+    volumes:
+      - ./server/data:/app/server/data
+      - ${LOCAL_MAP_DIR:-./maps}:/maps

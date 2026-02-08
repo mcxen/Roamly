@@ -1,0 +1,26 @@
+{
+  "name": "roamly-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --watch src --ext js,json --signal SIGTERM src/index.js",
+    "start": "node src/index.js",
+    "build": "node src/scripts/ensure-data-dir.js"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fast-glob": "^3.3.2",
+    "image-size": "^1.1.1",
+    "mime-types": "^2.1.35",
+    "multer": "^1.4.5-lts.1",
+    "pino": "^9.1.0",
+    "pino-pretty": "^11.1.0",
+    "webdav": "^5.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
