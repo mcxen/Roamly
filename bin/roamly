@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PREFIX_DIR="$(cd "${BIN_DIR}/.." && pwd)"
+APP_DIR="${ROAMLY_HOME:-"${PREFIX_DIR}/libexec/roamly"}"
+
+if [[ ! -d "${APP_DIR}/server" ]]; then
+  if [[ -d "${PREFIX_DIR}/server" ]]; then
+    APP_DIR="${PREFIX_DIR}"
+  else
+    echo "Roamly: 无法定位安装目录。请设置 ROAMLY_HOME 指向应用根目录。" >&2
+    exit 1
+  fi
+fi
+
+DATA_DIR="${DATA_DIR:-${ROAMLY_DATA_DIR:-}}"
+if [[ -z "${DATA_DIR}" ]]; then
+  if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+    DATA_DIR="${HOME}/Library/Application Support/Roamly"
+  else
+    DATA_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/roamly"
+  fi
+fi
+
+mkdir -p "${DATA_DIR}"
+
+export DATA_DIR
+if [[ -z "${DB_PATH:-}" ]]; then
+  export DB_PATH="${DATA_DIR}/roamly.db"
+fi
+
+if [[ -z "${ENV_FILE:-}" ]]; then
+  if [[ -n "${ROAMLY_ENV_FILE:-}" ]]; then
+    export ENV_FILE="${ROAMLY_ENV_FILE}"
+  elif [[ -f "${DATA_DIR}/.env" ]]; then
+    export ENV_FILE="${DATA_DIR}/.env"
+  elif [[ -f "${APP_DIR}/.env" ]]; then
+    export ENV_FILE="${APP_DIR}/.env"
+  fi
+fi
+
+export NODE_ENV="${NODE_ENV:-production}"
+export WEB_DIST_DIR="${WEB_DIST_DIR:-"${APP_DIR}/web/dist"}"
+
+exec node "${APP_DIR}/server/src/index.js"

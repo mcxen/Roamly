@@ -9,13 +9,14 @@ dotenv.config({
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
 
+const dataDir = process.env.DATA_DIR || path.resolve(rootDir, 'server', 'data');
 const storageDriver = process.env.STORAGE_DRIVER || 'local';
 const mapLibraryDir = process.env.MAP_LIBRARY_DIR;
 
 export const config = {
   rootDir,
-  dataDir: path.resolve(rootDir, 'server', 'data'),
-  dbPath: process.env.DB_PATH || path.resolve(rootDir, 'server', 'data', 'roamly.db'),
+  dataDir,
+  dbPath: process.env.DB_PATH || path.resolve(dataDir, 'roamly.db'),
   port: Number(process.env.PORT || 4173),
   storageDriver,
   mapLibraryDir,
