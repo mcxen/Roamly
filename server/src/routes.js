@@ -55,6 +55,68 @@ const isUnknownKeyword = (value) => {
   return text === 'unknown' || text === '未设置' || text === '未知';
 };
 
+const splitLocationValues = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => String(item).trim()).filter(Boolean);
+        }
+      } catch (_err) {
+        // ignore
+      }
+    }
+    return String(value)
+      .split(/[;,，；/、|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const normalizeFacetToken = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'unknown' || trimmed === '未知' || trimmed === '未设置') return '';
+  return trimmed;
+};
+
+const buildLocationFacet = (rows, fields, limit, fallbackValue) => {
+  const counts = new Map();
+  const fieldList = Array.isArray(fields) ? fields : [fields];
+
+  for (const row of rows) {
+    const parts = fieldList
+      .flatMap((field) => splitLocationValues(row?.[field]))
+      .map(normalizeFacetToken)
+      .filter(Boolean);
+
+    if (!parts.length) {
+      if (fallbackValue) {
+        counts.set(fallbackValue, (counts.get(fallbackValue) || 0) + 1);
+      }
+      continue;
+    }
+
+    const unique = new Set(parts);
+    for (const value of unique) {
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+  }
+
+  return Array.from(counts, ([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+};
+
 const resolveNullableNumber = (incoming, currentValue) => {
   if (incoming === undefined) return currentValue ?? null;
   if (incoming === null || incoming === '') return null;
@@ -78,7 +140,7 @@ const buildListQuery = (query) => {
   const filterParams = {};
 
   if (query.q) {
-    where.push('(title LIKE @q OR file_name LIKE @q OR city LIKE @q OR country_name LIKE @q OR ocr_text LIKE @q)');
+    where.push('(title LIKE @q OR file_name LIKE @q OR city LIKE @q OR country_name LIKE @q OR related_countries LIKE @q OR related_provinces LIKE @q OR ocr_text LIKE @q)');
     filterParams.q = `%${query.q}%`;
   }
 
@@ -98,20 +160,24 @@ const buildListQuery = (query) => {
   }
 
   if (query.country) {
-    const isGlobalCountry = String(query.country).trim() === '全球';
+    const trimmedCountry = String(query.country).trim();
+    const isGlobalCountry = trimmedCountry === '全球';
+    const lowerCountry = trimmedCountry.toLowerCase();
+    const isChina = trimmedCountry === '中国' || lowerCountry === 'china';
     if (isGlobalCountry) {
       where.push(`(
         country_name LIKE @country
         OR country_name IS NULL
         OR TRIM(country_name) = ''
         OR scope_level = 'international'
+        OR related_countries LIKE @country
         OR tags LIKE @country_tag
         OR ocr_text LIKE @country_text
       )`);
-      filterParams.country = `%${query.country}%`;
-      filterParams.country_tag = `%"${query.country}"%`;
-      filterParams.country_text = `%${query.country}%`;
-    } else if (isUnknownKeyword(query.country)) {
+      filterParams.country = `%${trimmedCountry}%`;
+      filterParams.country_tag = `%"${trimmedCountry}"%`;
+      filterParams.country_text = `%${trimmedCountry}%`;
+    } else if (isUnknownKeyword(trimmedCountry)) {
       where.push(`(
         country_name IS NULL
         OR TRIM(country_name) = ''
@@ -120,10 +186,25 @@ const buildListQuery = (query) => {
         OR TRIM(country_name) = '未设置'
       )`);
     } else {
-      where.push('(country_name LIKE @country OR tags LIKE @country_tag OR ocr_text LIKE @country_text)');
-      filterParams.country = `%${query.country}%`;
-      filterParams.country_tag = `%"${query.country}"%`;
-      filterParams.country_text = `%${query.country}%`;
+      if (isChina) {
+        where.push(`(
+          country_name LIKE @country
+          OR country_name LIKE @country_alt
+          OR country_code = 'CN'
+          OR related_countries LIKE @country_related
+          OR related_countries LIKE @country_related_alt
+          OR tags LIKE @country_tag
+          OR ocr_text LIKE @country_text
+        )`);
+        filterParams.country_alt = '%China%';
+        filterParams.country_related_alt = '%"China"%';
+      } else {
+        where.push('(country_name LIKE @country OR related_countries LIKE @country_related OR tags LIKE @country_tag OR ocr_text LIKE @country_text)');
+      }
+      filterParams.country = `%${trimmedCountry}%`;
+      filterParams.country_related = `%"${trimmedCountry}"%`;
+      filterParams.country_tag = `%"${trimmedCountry}"%`;
+      filterParams.country_text = `%${trimmedCountry}%`;
     }
   }
 
@@ -137,8 +218,9 @@ const buildListQuery = (query) => {
         OR TRIM(province) = '未设置'
       )`);
     } else {
-      where.push('province LIKE @province');
+      where.push('(province LIKE @province OR related_provinces LIKE @province_related)');
       filterParams.province = `%${query.province}%`;
+      filterParams.province_related = `%"${query.province}"%`;
     }
   }
 
@@ -423,8 +505,67 @@ router.get('/maps', (req, res) => {
 
 router.get('/maps/facets', (req, res) => {
   const source = req.query.source;
-  const where = source ? 'WHERE source = @source' : '';
-  const params = source ? { source } : {};
+  const countryFilter = req.query.country;
+  const whereParts = [];
+  const params = {};
+
+  if (source) {
+    whereParts.push('source = @source');
+    params.source = source;
+  }
+
+  if (countryFilter) {
+    const trimmed = String(countryFilter).trim();
+    const lower = trimmed.toLowerCase();
+    const isChina = trimmed === '中国' || lower === 'china';
+    if (trimmed) {
+      const isGlobalCountry = trimmed === '全球';
+      if (isGlobalCountry) {
+        whereParts.push(`(
+          country_name LIKE @country
+          OR country_name IS NULL
+          OR TRIM(country_name) = ''
+          OR scope_level = 'international'
+          OR related_countries LIKE @country
+          OR tags LIKE @country_tag
+          OR ocr_text LIKE @country_text
+        )`);
+        params.country = `%${trimmed}%`;
+        params.country_tag = `%"${trimmed}"%`;
+        params.country_text = `%${trimmed}%`;
+      } else if (isUnknownKeyword(trimmed)) {
+        whereParts.push(`(
+          country_name IS NULL
+          OR TRIM(country_name) = ''
+          OR LOWER(TRIM(country_name)) = 'unknown'
+          OR TRIM(country_name) = '未知'
+          OR TRIM(country_name) = '未设置'
+        )`);
+      } else {
+        if (isChina) {
+          whereParts.push(`(
+            country_name LIKE @country
+            OR country_name LIKE @country_alt
+            OR country_code = 'CN'
+            OR related_countries LIKE @country_related
+            OR related_countries LIKE @country_related_alt
+            OR tags LIKE @country_tag
+            OR ocr_text LIKE @country_text
+          )`);
+          params.country_alt = '%China%';
+          params.country_related_alt = '%"China"%';
+        } else {
+          whereParts.push('(country_name LIKE @country OR related_countries LIKE @country_related OR tags LIKE @country_tag OR ocr_text LIKE @country_text)');
+        }
+        params.country = `%${trimmed}%`;
+        params.country_related = `%"${trimmed}"%`;
+        params.country_tag = `%"${trimmed}"%`;
+        params.country_text = `%${trimmed}%`;
+      }
+    }
+  }
+
+  const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
   const scope = dbInstance.prepare(`
     SELECT COALESCE(NULLIF(TRIM(scope_level), ''), 'unknown') AS value, COUNT(*) AS count
@@ -433,86 +574,20 @@ router.get('/maps/facets', (req, res) => {
     ORDER BY count DESC
   `).all(params);
 
-  const country = dbInstance.prepare(`
-    SELECT
-      CASE
-        WHEN country_name IS NULL
-          OR TRIM(country_name) = ''
-          OR LOWER(TRIM(country_name)) = 'unknown'
-          OR TRIM(country_name) = '未知'
-          OR TRIM(country_name) = '未设置'
-        THEN '全球'
-        ELSE TRIM(country_name)
-      END AS value,
-      COUNT(*) AS count
-    FROM maps ${where}
-    GROUP BY
-      CASE
-        WHEN country_name IS NULL
-          OR TRIM(country_name) = ''
-          OR LOWER(TRIM(country_name)) = 'unknown'
-          OR TRIM(country_name) = '未知'
-          OR TRIM(country_name) = '未设置'
-        THEN '全球'
-        ELSE TRIM(country_name)
-      END
-    ORDER BY count DESC
-    LIMIT 80
+  const countryRows = dbInstance.prepare(`
+    SELECT country_name, related_countries FROM maps ${where}
   `).all(params);
+  const country = buildLocationFacet(countryRows, ['country_name', 'related_countries'], 80, '全球');
 
-  const province = dbInstance.prepare(`
-    SELECT
-      CASE
-        WHEN province IS NULL
-          OR TRIM(province) = ''
-          OR LOWER(TRIM(province)) = 'unknown'
-          OR TRIM(province) = '未知'
-          OR TRIM(province) = '未设置'
-        THEN 'Unknown'
-        ELSE TRIM(province)
-      END AS value,
-      COUNT(*) AS count
-    FROM maps ${where}
-    GROUP BY
-      CASE
-        WHEN province IS NULL
-          OR TRIM(province) = ''
-          OR LOWER(TRIM(province)) = 'unknown'
-          OR TRIM(province) = '未知'
-          OR TRIM(province) = '未设置'
-        THEN 'Unknown'
-        ELSE TRIM(province)
-      END
-    ORDER BY count DESC
-    LIMIT 120
+  const provinceRows = dbInstance.prepare(`
+    SELECT province, related_provinces FROM maps ${where}
   `).all(params);
+  const province = buildLocationFacet(provinceRows, ['province', 'related_provinces'], 120, 'Unknown');
 
-  const city = dbInstance.prepare(`
-    SELECT
-      CASE
-        WHEN city IS NULL
-          OR TRIM(city) = ''
-          OR LOWER(TRIM(city)) = 'unknown'
-          OR TRIM(city) = '未知'
-          OR TRIM(city) = '未设置'
-        THEN 'Unknown'
-        ELSE TRIM(city)
-      END AS value,
-      COUNT(*) AS count
-    FROM maps ${where}
-    GROUP BY
-      CASE
-        WHEN city IS NULL
-          OR TRIM(city) = ''
-          OR LOWER(TRIM(city)) = 'unknown'
-          OR TRIM(city) = '未知'
-          OR TRIM(city) = '未设置'
-        THEN 'Unknown'
-        ELSE TRIM(city)
-      END
-    ORDER BY count DESC
-    LIMIT 180
+  const cityRows = dbInstance.prepare(`
+    SELECT city FROM maps ${where}
   `).all(params);
+  const city = buildLocationFacet(cityRows, 'city', 180, 'Unknown');
 
   res.json({ scope, country, province, city });
 });
@@ -569,6 +644,8 @@ router.put('/maps/:id', async (req, res) => {
     country_code: body.country_code ?? row.country_code ?? resolvedLocation?.country_code,
     country_name: body.country_name ?? row.country_name ?? resolvedLocation?.country_name,
     province: body.province ?? row.province ?? resolvedLocation?.province,
+    related_countries: toTagsJson(body.related_countries ?? current.related_countries),
+    related_provinces: toTagsJson(body.related_provinces ?? current.related_provinces),
     city: body.city ?? row.city ?? resolvedLocation?.city,
     district: body.district ?? row.district ?? resolvedLocation?.district,
     latitude: body.latitude !== undefined
@@ -596,6 +673,8 @@ router.put('/maps/:id', async (req, res) => {
       country_code: updated.country_code,
       country_name: updated.country_name,
       province: updated.province,
+      related_countries: updated.related_countries,
+      related_provinces: updated.related_provinces,
       city: updated.city,
       district: updated.district,
       latitude: updated.latitude,

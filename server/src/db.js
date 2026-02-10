@@ -22,6 +22,8 @@ db.exec(`
     country_code TEXT,
     country_name TEXT,
     province TEXT,
+    related_countries TEXT,
+    related_provinces TEXT,
     city TEXT,
     district TEXT,
     latitude REAL,
@@ -59,12 +61,22 @@ const maybeAddColumn = (columnSql) => {
   }
 };
 
+const maybeCreateIndex = (indexSql) => {
+  try {
+    db.exec(indexSql);
+  } catch (_err) {
+    // ignore when column missing in legacy db
+  }
+};
+
 maybeAddColumn('description TEXT');
 maybeAddColumn('collection_unit TEXT');
 maybeAddColumn('scope_level TEXT');
 maybeAddColumn('country_code TEXT');
 maybeAddColumn('country_name TEXT');
 maybeAddColumn('province TEXT');
+maybeAddColumn('related_countries TEXT');
+maybeAddColumn('related_provinces TEXT');
 maybeAddColumn('city TEXT');
 maybeAddColumn('district TEXT');
 maybeAddColumn('latitude REAL');
@@ -75,6 +87,9 @@ maybeAddColumn('ocr_status TEXT');
 maybeAddColumn('ocr_error TEXT');
 maybeAddColumn('ocr_updated_at TEXT');
 maybeAddColumn('ocr_mtime_ms INTEGER');
+
+maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_maps_related_countries ON maps(related_countries)');
+maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_maps_related_provinces ON maps(related_provinces)');
 
 export const statements = {
   upsertMap: db.prepare(`
@@ -90,6 +105,8 @@ export const statements = {
       country_code,
       country_name,
       province,
+      related_countries,
+      related_provinces,
       city,
       district,
       latitude,
@@ -121,6 +138,8 @@ export const statements = {
       @country_code,
       @country_name,
       @province,
+      @related_countries,
+      @related_provinces,
       @city,
       @district,
       @latitude,
@@ -157,6 +176,8 @@ export const statements = {
       country_code = COALESCE(NULLIF(maps.country_code, ''), excluded.country_code),
       country_name = COALESCE(NULLIF(maps.country_name, ''), excluded.country_name),
       province = COALESCE(NULLIF(maps.province, ''), excluded.province),
+      related_countries = COALESCE(NULLIF(maps.related_countries, ''), excluded.related_countries),
+      related_provinces = COALESCE(NULLIF(maps.related_provinces, ''), excluded.related_provinces),
       city = COALESCE(NULLIF(maps.city, ''), excluded.city),
       district = COALESCE(NULLIF(maps.district, ''), excluded.district),
       latitude = COALESCE(maps.latitude, excluded.latitude),
@@ -194,6 +215,8 @@ export const statements = {
         country_code = @country_code,
         country_name = @country_name,
         province = @province,
+        related_countries = @related_countries,
+        related_provinces = @related_provinces,
         city = @city,
         district = @district,
         latitude = @latitude,
@@ -280,6 +303,8 @@ export const rowToMap = (row) => {
   return {
     ...row,
     tags: parseTags(row.tags),
+    related_countries: parseTags(row.related_countries),
+    related_provinces: parseTags(row.related_provinces),
     favorite: Boolean(row.favorite)
   };
 };

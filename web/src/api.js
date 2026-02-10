@@ -49,9 +49,22 @@ export const api = {
     });
     return handle(await fetch(`/api/maps?${query.toString()}`));
   },
-  async facets(source) {
-    const query = source ? `?source=${encodeURIComponent(source)}` : '';
-    return handle(await fetch(`/api/maps/facets${query}`));
+  async facets(options) {
+    const query = new URLSearchParams();
+    if (typeof options === 'string') {
+      if (options) {
+        query.set('source', options);
+      }
+    } else if (options && typeof options === 'object') {
+      if (options.source) {
+        query.set('source', options.source);
+      }
+      if (options.country) {
+        query.set('country', options.country);
+      }
+    }
+    const suffix = query.toString();
+    return handle(await fetch(`/api/maps/facets${suffix ? `?${suffix}` : ''}`));
   },
   async map(id) {
     return handle(await fetch(`/api/maps/${id}`));

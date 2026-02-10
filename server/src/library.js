@@ -259,6 +259,8 @@ const toRowFromProjectMeta = ({
   persistedMeta
 }) => {
   const persistedTags = parseTagsValue(persistedMeta?.tags);
+  const persistedRelatedCountries = parseTagsValue(persistedMeta?.related_countries);
+  const persistedRelatedProvinces = parseTagsValue(persistedMeta?.related_provinces);
 
   const sameOcrMtime = persistedMeta?.ocr_mtime_ms !== null
     && persistedMeta?.ocr_mtime_ms !== undefined
@@ -278,6 +280,8 @@ const toRowFromProjectMeta = ({
     country_code: persistedMeta?.country_code || inferred.country_code || GLOBAL_BASE_LOCATION.country_code,
     country_name: persistedMeta?.country_name || inferred.country_name || GLOBAL_BASE_LOCATION.country_name,
     province: persistedMeta?.province || inferred.province,
+    related_countries: persistedRelatedCountries.length ? JSON.stringify(persistedRelatedCountries) : null,
+    related_provinces: persistedRelatedProvinces.length ? JSON.stringify(persistedRelatedProvinces) : null,
     city: persistedMeta?.city || inferred.city,
     district: persistedMeta?.district || inferred.district,
     latitude: persistedMeta?.latitude ?? inferred.latitude,
@@ -309,6 +313,8 @@ const rowToProjectMeta = (row) => ({
   country_code: row.country_code || null,
   country_name: row.country_name || null,
   province: row.province || null,
+  related_countries: parseTagsValue(row.related_countries),
+  related_provinces: parseTagsValue(row.related_provinces),
   city: row.city || null,
   district: row.district || null,
   latitude: row.latitude ?? null,

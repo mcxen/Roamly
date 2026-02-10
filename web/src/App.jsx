@@ -85,6 +85,8 @@ const emptyForm = {
   country_code: '',
   country_name: '',
   province: '',
+  related_countries: '',
+  related_provinces: '',
   city: '',
   district: '',
   latitude: '',
@@ -108,15 +110,35 @@ const DEFAULT_UI_SETTINGS = {
   thumbnailLabelSize: 14,
   thumbnailHeight: 160,
   thumbnailWidth: 180,
-  detailPreviewHeight: 520
+  detailPreviewHeight: 440
 };
 
 const DEFAULT_PANE_SIZES = {
-  left: 280,
   right: 620
 };
 
+const GLOBE_DOCK_MARGIN = 8;
+const GLOBE_TOGGLE_WIDTH = 34;
+const LAYOUT_BASE_PADDING = 10;
+const GLOBE_TOGGLE_OFFSET = Math.max(0, GLOBE_DOCK_MARGIN + GLOBE_TOGGLE_WIDTH - LAYOUT_BASE_PADDING);
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const splitMultiValue = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  return String(value)
+    .split(/[;,，；/、|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const joinMultiValue = (value) => {
+  if (!value) return '';
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ');
+  return String(value);
+};
 
 const loadJsonFromStorage = (key, fallbackValue) => {
   try {
@@ -171,6 +193,18 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
   const dragStateRef = useRef(null);
   const rotationRef = useRef([-20, -20, 0]);
   const [rotation, setRotation] = useState(rotationRef.current);
+  const zoomRef = useRef(1);
+  const [zoom, setZoom] = useState(zoomRef.current);
+
+  const updateZoom = useCallback((value) => {
+    const next = clamp(value, 0.7, 2.1);
+    zoomRef.current = next;
+    setZoom(next);
+  }, []);
+
+  const bumpZoom = useCallback((delta) => {
+    updateZoom(zoomRef.current + delta);
+  }, [updateZoom]);
 
   const drawGlobe = useCallback(() => {
     const canvas = canvasRef.current;
@@ -188,7 +222,7 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const scale = Math.min(width, height) * 0.46;
+    const scale = Math.min(width, height) * 0.46 * zoom;
     const projection = geoOrthographic()
       .translate([width / 2, height / 2])
       .scale(scale)
@@ -242,7 +276,7 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
     ctx.strokeStyle = 'rgba(16,30,44,0.7)';
     ctx.lineWidth = 1.3;
     ctx.stroke();
-  }, [rotation, selectedCountry]);
+  }, [rotation, selectedCountry, zoom]);
 
   useEffect(() => {
     drawGlobe();
@@ -301,7 +335,7 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
     const height = canvas.clientHeight || rect.height;
     const projection = geoOrthographic()
       .translate([width / 2, height / 2])
-      .scale(Math.min(width, height) * 0.46)
+      .scale(Math.min(width, height) * 0.46 * zoomRef.current)
       .clipAngle(90)
       .rotate(rotationRef.current);
 
@@ -319,6 +353,12 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
     });
   };
 
+  const handleWheel = (event) => {
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 0.12 : -0.12;
+    updateZoom(zoomRef.current + delta);
+  };
+
   return (
     <div className="globe-wrap">
       <canvas
@@ -327,8 +367,14 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onWheel={handleWheel}
       />
-      <div className="globe-tip">拖拽旋转地球仪，点击国家后自动筛选</div>
+      <div className="globe-zoom">
+        <button onClick={() => bumpZoom(0.15)}>放大</button>
+        <button onClick={() => bumpZoom(-0.15)}>缩小</button>
+        <button onClick={() => updateZoom(1)}>重置</button>
+      </div>
+      <div className="globe-tip">拖拽旋转，滚轮缩放，点击国家后自动筛选</div>
     </div>
   );
 }
@@ -372,9 +418,16 @@ function App() {
   const [uiSettings, setUiSettings] = useState(() => loadJsonFromStorage('roamly-ui-settings', DEFAULT_UI_SETTINGS));
   const [paneSizes, setPaneSizes] = useState(() => loadJsonFromStorage('roamly-pane-sizes', DEFAULT_PANE_SIZES));
   const [resizingPane, setResizingPane] = useState('');
+  const [globeOpen, setGlobeOpen] = useState(true);
+  const [globeDock, setGlobeDock] = useState({ x: 12, y: 82, side: 'left' });
+  const [globeSize, setGlobeSize] = useState({ width: 340, height: 520 });
+  const [globeDragging, setGlobeDragging] = useState(false);
 
   const layoutRef = useRef(null);
   const resizeStateRef = useRef(null);
+  const globeRef = useRef(null);
+  const globeDragRef = useRef(null);
+  const globeDockRef = useRef(globeDock);
 
   const selectedSummary = useMemo(() => maps.find((item) => item.id === selectedId) || null, [maps, selectedId]);
   const detailImageSrc = useMemo(() => {
@@ -407,10 +460,60 @@ function App() {
     return Math.max(1, pages);
   }, [total, pageSize]);
 
+  const globeOffsetLeft = globeDock.side === 'left'
+    ? (globeOpen ? Math.max(0, globeSize.width + GLOBE_TOGGLE_OFFSET) : GLOBE_TOGGLE_OFFSET)
+    : 0;
+  const globeOffsetRight = globeDock.side === 'right'
+    ? (globeOpen ? Math.max(0, globeSize.width + GLOBE_TOGGLE_OFFSET) : GLOBE_TOGGLE_OFFSET)
+    : 0;
+
   const layoutStyle = useMemo(() => ({
-    '--left-pane-width': `${clamp(Number(paneSizes.left) || DEFAULT_PANE_SIZES.left, 220, 600)}px`,
-    '--right-pane-width': `${clamp(Number(paneSizes.right) || DEFAULT_PANE_SIZES.right, 360, 900)}px`
-  }), [paneSizes.left, paneSizes.right]);
+    '--right-pane-width': `${clamp(Number(paneSizes.right) || DEFAULT_PANE_SIZES.right, 360, 900)}px`,
+    '--globe-offset-left': `${globeOffsetLeft}px`,
+    '--globe-offset-right': `${globeOffsetRight}px`
+  }), [paneSizes.right, globeOffsetLeft, globeOffsetRight]);
+
+  const provinceOptions = useMemo(() => {
+    const items = Array.isArray(facets.province) ? facets.province : [];
+    const seen = new Set();
+    const options = [];
+
+    for (const item of items) {
+      const raw = String(item?.value || '').trim();
+      if (!raw) continue;
+      const isUnknown = raw.toLowerCase() === 'unknown' || raw === '未知' || raw === '未设置';
+      const label = isUnknown ? '未设置' : raw;
+      const value = isUnknown ? '未设置' : raw;
+      if (seen.has(value)) continue;
+      seen.add(value);
+      options.push({ label, value, count: item?.count || 0 });
+    }
+
+    return options;
+  }, [facets.province]);
+
+  const activeCountryLabel = String(filters.country || '').trim() || '全部';
+  const provinceEnabled = Boolean(filters.country) && String(filters.country).trim() !== '全球';
+  const isChinaSelected = ['中国', 'china', 'China'].includes(String(filters.country || '').trim());
+  const fallbackChinaProvinces = useMemo(() => {
+    if (!chinaCityOptions.length) return [];
+    const seen = new Set();
+    const options = [];
+    for (const item of chinaCityOptions) {
+      const raw = String(item?.province || '').trim();
+      if (!raw || seen.has(raw)) continue;
+      seen.add(raw);
+      options.push({ label: raw, value: raw, count: 0 });
+    }
+    return options;
+  }, [chinaCityOptions]);
+  const effectiveProvinceOptions = provinceOptions.length
+    ? provinceOptions
+    : (isChinaSelected ? fallbackChinaProvinces : []);
+
+  useEffect(() => {
+    globeDockRef.current = globeDock;
+  }, [globeDock]);
 
   const refreshStatus = useCallback(async () => {
     const data = await api.status();
@@ -480,9 +583,12 @@ function App() {
     }
   }, [status?.storageDriver, storageForm.mapLibraryDir]);
 
-  const loadFacets = useCallback(async (source) => {
+  const loadFacets = useCallback(async (source, country) => {
     try {
-      const data = await api.facets(source || undefined);
+      const data = await api.facets({
+        source: source || undefined,
+        country: country || undefined
+      });
       setFacets(data);
     } catch (err) {
       setError(err.message);
@@ -633,7 +739,7 @@ function App() {
       }
 
       await loadMaps();
-      await loadFacets(filters.source || undefined);
+      await loadFacets(filters.source || undefined, filters.country || undefined);
       await refreshOcrStatus();
 
       const scanned = data.scan?.scanned;
@@ -653,16 +759,24 @@ function App() {
     if (!selectedId) return;
     setBusy(true);
     try {
+      const multiLocationPattern = /[;,，；/、|]/;
+      const hasMultiLocation = multiLocationPattern.test(form.province || '')
+        || multiLocationPattern.test(form.city || '');
+      const relatedCountries = splitMultiValue(form.related_countries);
+      const relatedProvinces = splitMultiValue(form.related_provinces);
       await api.saveMap(selectedId, {
         ...form,
         tags: form.tags
           .split(',')
           .map((item) => item.trim())
           .filter(Boolean),
-        auto_resolve_city: true
+        related_countries: relatedCountries,
+        related_provinces: relatedProvinces,
+        auto_resolve_city: !hasMultiLocation
       });
       setMessage('已保存元数据');
       await loadMaps();
+      await loadFacets(filters.source || undefined, filters.country || undefined);
       const data = await api.map(selectedId);
       setSelectedMap(data);
     } catch (err) {
@@ -688,7 +802,7 @@ function App() {
       const data = await api.scan();
       setMessage(`扫描完成: ${data.scanned} 张`);
       await loadMaps();
-      await loadFacets(filters.source || undefined);
+      await loadFacets(filters.source || undefined, filters.country || undefined);
       await loadStorageFolders(status?.storageDriver);
       await refreshOcrStatus();
     } catch (err) {
@@ -706,7 +820,7 @@ function App() {
       setUploadFiles([]);
       setMessage(`上传并复制完成: ${result.count} 张`);
       await loadMaps();
-      await loadFacets(filters.source || undefined);
+      await loadFacets(filters.source || undefined, filters.country || undefined);
       await loadStorageFolders(status?.storageDriver);
       await refreshOcrStatus();
     } catch (err) {
@@ -735,7 +849,6 @@ function App() {
     resizeStateRef.current = {
       pane,
       startX: event.clientX,
-      startLeft: clamp(Number(paneSizes.left) || DEFAULT_PANE_SIZES.left, 220, 600),
       startRight: clamp(Number(paneSizes.right) || DEFAULT_PANE_SIZES.right, 360, 900)
     };
     setResizingPane(pane);
@@ -744,6 +857,95 @@ function App() {
   const resetPaneSizes = () => {
     setPaneSizes(DEFAULT_PANE_SIZES);
   };
+
+  const measureGlobe = useCallback(() => {
+    const node = globeRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      setGlobeSize({ width: rect.width, height: rect.height });
+    }
+  }, []);
+
+  const getGlobeLimits = useCallback(() => {
+    const margin = GLOBE_DOCK_MARGIN;
+    const topInset = 64;
+    const width = globeSize.width || 320;
+    const height = globeSize.height || 420;
+    const maxX = Math.max(margin, window.innerWidth - width - margin);
+    const maxY = Math.max(topInset, window.innerHeight - height - margin);
+    return {
+      margin,
+      topInset,
+      width,
+      height,
+      maxX,
+      maxY
+    };
+  }, [globeSize.height, globeSize.width]);
+
+  const clampGlobePosition = useCallback((x, y) => {
+    const { margin, topInset, maxX, maxY } = getGlobeLimits();
+    return {
+      x: clamp(x, margin, maxX),
+      y: clamp(y, topInset, maxY)
+    };
+  }, [getGlobeLimits]);
+
+  const snapGlobeToEdge = useCallback((x, y) => {
+    const { margin, topInset, maxX, maxY } = getGlobeLimits();
+    const clamped = clampGlobePosition(x, y);
+    const distances = {
+      left: clamped.x - margin,
+      right: maxX - clamped.x,
+      top: clamped.y - topInset,
+      bottom: maxY - clamped.y
+    };
+
+    let side = 'left';
+    let min = distances.left;
+    for (const [key, value] of Object.entries(distances)) {
+      if (value < min) {
+        min = value;
+        side = key;
+      }
+    }
+
+    const snapped = {
+      x: clamped.x,
+      y: clamped.y,
+      side
+    };
+
+    if (side === 'left') {
+      snapped.x = margin;
+      snapped.y = clamp(clamped.y, topInset, maxY);
+    } else if (side === 'right') {
+      snapped.x = maxX;
+      snapped.y = clamp(clamped.y, topInset, maxY);
+    } else if (side === 'top') {
+      snapped.x = clamp(clamped.x, margin, maxX);
+      snapped.y = topInset;
+    } else if (side === 'bottom') {
+      snapped.x = clamp(clamped.x, margin, maxX);
+      snapped.y = maxY;
+    }
+
+    globeDockRef.current = snapped;
+    setGlobeDock(snapped);
+  }, [clampGlobePosition, getGlobeLimits]);
+
+  const handleGlobePointerDown = useCallback((event) => {
+    if (!globeOpen) return;
+    event.preventDefault();
+    globeDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: globeDockRef.current.x,
+      originY: globeDockRef.current.y
+    };
+    setGlobeDragging(true);
+  }, [globeOpen]);
 
   useEffect(() => {
     refreshStatus()
@@ -763,8 +965,8 @@ function App() {
   }, [loadMaps]);
 
   useEffect(() => {
-    loadFacets(filters.source || undefined);
-  }, [filters.source, loadFacets]);
+    loadFacets(filters.source || undefined, filters.country || undefined);
+  }, [filters.source, filters.country, loadFacets]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -780,6 +982,8 @@ function App() {
           country_code: data.country_code || '',
           country_name: data.country_name || '',
           province: data.province || '',
+          related_countries: joinMultiValue(data.related_countries),
+          related_provinces: joinMultiValue(data.related_provinces),
           city: data.city || '',
           district: data.district || '',
           latitude: data.latitude ?? '',
@@ -850,14 +1054,7 @@ function App() {
       const gutters = 20;
       const deltaX = event.clientX - state.startX;
 
-      if (state.pane === 'left') {
-        const maxLeft = Math.max(240, totalWidth - state.startRight - minCenterWidth - gutters);
-        const nextLeft = clamp(state.startLeft + deltaX, 220, maxLeft);
-        setPaneSizes((prev) => ({ ...prev, left: nextLeft }));
-        return;
-      }
-
-      const maxRight = Math.max(380, totalWidth - state.startLeft - minCenterWidth - gutters);
+      const maxRight = Math.max(380, totalWidth - minCenterWidth - gutters);
       const nextRight = clamp(state.startRight - deltaX, 360, maxRight);
       setPaneSizes((prev) => ({ ...prev, right: nextRight }));
     };
@@ -877,6 +1074,54 @@ function App() {
       document.body.classList.remove('resizing-panes');
     };
   }, [resizingPane]);
+
+  useEffect(() => {
+    measureGlobe();
+    const initial = globeDockRef.current;
+    if (initial) {
+      snapGlobeToEdge(initial.x, initial.y);
+    }
+    const onResize = () => {
+      measureGlobe();
+      const current = globeDockRef.current;
+      if (current) {
+        snapGlobeToEdge(current.x, current.y);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [measureGlobe, snapGlobeToEdge]);
+
+  useEffect(() => {
+    if (!globeDragging) return;
+
+    const onMove = (event) => {
+      const state = globeDragRef.current;
+      if (!state) return;
+      const next = clampGlobePosition(
+        state.originX + (event.clientX - state.startX),
+        state.originY + (event.clientY - state.startY)
+      );
+      globeDockRef.current = { ...(globeDockRef.current || {}), ...next };
+      setGlobeDock((prev) => ({ ...prev, ...next }));
+    };
+
+    const onUp = () => {
+      globeDragRef.current = null;
+      setGlobeDragging(false);
+      const current = globeDockRef.current;
+      if (current) {
+        snapGlobeToEdge(current.x, current.y);
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [clampGlobePosition, globeDragging, snapGlobeToEdge]);
 
   return (
     <div className="page-root">
@@ -899,101 +1144,99 @@ function App() {
         </div>
       </header>
 
+      <div
+        ref={globeRef}
+        className={`globe-panel ${globeOpen ? 'is-open' : 'is-closed'}${globeDragging ? ' is-dragging' : ''}`}
+        data-side={globeDock.side}
+        style={{ left: globeDock.x, top: globeDock.y }}
+      >
+        <button
+          className="globe-toggle"
+          onClick={() => setGlobeOpen((prev) => !prev)}
+          title={globeOpen ? '隐藏地球筛选' : '打开地球筛选'}
+        >
+          {globeOpen ? '收起' : '地球筛选'}
+        </button>
+        <div className="globe-panel-inner">
+          <div className="globe-panel-header" onPointerDown={handleGlobePointerDown}>
+            <div>
+              <h4>全球交互筛选</h4>
+              <div className="globe-panel-sub">当前国家: {activeCountryLabel}</div>
+            </div>
+            <button
+              className="globe-hide"
+              onClick={() => setGlobeOpen(false)}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              隐藏
+            </button>
+          </div>
+          <div className="globe-filter-actions">
+            <button
+              onClick={() => patchFilters({
+                scope: '',
+                country: '全球',
+                city: '',
+                province: ''
+              })}
+            >
+              返回全球
+            </button>
+            <button
+              onClick={() => patchFilters({
+                scope: '',
+                country: '',
+                city: '',
+                province: ''
+              })}
+            >
+              查看全部
+            </button>
+          </div>
+          <GlobeCountryPicker
+            selectedCountry={filters.country}
+            onPickCountry={(item) => {
+              patchFilters({
+                scope: '',
+                country: item.country || item.country_en || '',
+                province: '',
+                city: ''
+              });
+            }}
+          />
+          <div className="province-picker">
+            <div className="province-title">省份/州</div>
+            <select
+              value={filters.province}
+              onChange={(event) => patchFilters({ province: event.target.value, city: '' })}
+              disabled={!provinceEnabled}
+            >
+              <option value="">
+                {provinceEnabled ? '全部省份/州' : '先在地球选择国家'}
+              </option>
+              {effectiveProvinceOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label} ({item.count})
+                </option>
+              ))}
+            </select>
+            <button
+              className="province-clear"
+              onClick={() => patchFilters({ province: '', city: '' })}
+              disabled={!filters.province}
+            >
+              清空省份
+            </button>
+          </div>
+          <div className="china-tip">点击地球国家可筛选包含该国家的地图；选择后可继续筛选省份/州（含中国省份）。</div>
+        </div>
+      </div>
+
       <main
         ref={layoutRef}
         className={resizingPane ? 'layout is-resizing' : 'layout'}
         style={layoutStyle}
       >
-        <aside className="left-pane pane">
-          <div className="pane-title">目录分类</div>
-          <div className="facet-group">
-            <h4>国家</h4>
-            {facets.country.slice(0, 20).map((item, index) => {
-              const label = String(item.value || '').trim() || 'Unknown';
-              const selected = String(filters.country || '').trim().toLowerCase() === label.toLowerCase();
-              return (
-                <button
-                  key={`country-${label}-${index}`}
-                  className={selected ? 'facet active' : 'facet'}
-                  onClick={() => patchFilters({
-                    country: selected ? '' : label,
-                    city: '',
-                    province: ''
-                  })}
-                >
-                  <span>{label}</span>
-                  <strong>{item.count}</strong>
-                </button>
-              );
-            })}
-          </div>
-          <div className="facet-group">
-            <h4>城市</h4>
-            {facets.city.slice(0, 24).map((item, index) => {
-              const label = String(item.value || '').trim() || 'Unknown';
-              const selected = String(filters.city || '').trim().toLowerCase() === label.toLowerCase();
-              return (
-                <button
-                  key={`city-${label}-${index}`}
-                  className={selected ? 'facet active' : 'facet'}
-                  onClick={() => patchFilters({
-                    city: selected ? '' : label,
-                    country: '',
-                    province: ''
-                  })}
-                >
-                  <span>{label}</span>
-                  <strong>{item.count}</strong>
-                </button>
-              );
-            })}
-          </div>
-          <div className="facet-group globe-filter-wrap">
-            <h4>全球交互筛选</h4>
-            <div className="globe-filter-actions">
-              <button
-                onClick={() => patchFilters({
-                  scope: '',
-                  country: '全球',
-                  city: '',
-                  province: ''
-                })}
-              >
-                返回全球
-              </button>
-              <button
-                onClick={() => patchFilters({
-                  scope: '',
-                  country: '',
-                  city: '',
-                  province: ''
-                })}
-              >
-                查看全部
-              </button>
-            </div>
-            <GlobeCountryPicker
-              selectedCountry={filters.country}
-              onPickCountry={(item) => {
-                patchFilters({
-                  scope: '',
-                  country: item.country || item.country_en || '',
-                  province: '',
-                  city: ''
-                });
-              }}
-            />
-            <div className="china-tip">点击地球国家可筛选包含该国家的地图（含全球/East Asia 等跨国图）。</div>
-          </div>
-        </aside>
-
-        <div
-          className={resizingPane === 'left' ? 'pane-resizer active' : 'pane-resizer'}
-          onMouseDown={(event) => startResize('left', event)}
-          onDoubleClick={resetPaneSizes}
-          title="拖拽调整左栏宽度，双击恢复默认"
-        />
-
         <section className="center-pane pane">
           <div className="toolbar">
             <input
@@ -1247,11 +1490,27 @@ function App() {
                     <input value={form.country_name} onChange={(e) => setForm({ ...form, country_name: e.target.value })} />
                   </label>
                   <label>
-                    省/州
+                    省/州（可多个，用逗号分隔）
                     <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
                   </label>
                   <label>
-                    市（可直接输入地级市自动匹配）
+                    关联国家（可多个，用逗号分隔）
+                    <input
+                      value={form.related_countries}
+                      placeholder="日本, 中国"
+                      onChange={(e) => setForm({ ...form, related_countries: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    关联省份（可多个，用逗号分隔）
+                    <input
+                      value={form.related_provinces}
+                      placeholder="黑龙江, 吉林"
+                      onChange={(e) => setForm({ ...form, related_provinces: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    市（可多个，用逗号分隔；单城市可自动匹配）
                     <input
                       value={form.city}
                       list="china-city-datalist"

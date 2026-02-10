@@ -216,9 +216,37 @@ const toRelativePath = (descriptor, source, filePath) => {
 };
 
 const sanitizeMapMeta = (meta = {}) => {
+  const normalizeList = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.map((item) => String(item).trim()).filter(Boolean);
+          }
+        } catch (_err) {
+          // ignore
+        }
+      }
+      return trimmed
+        .split(/[;,，；/、|]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
   const tags = Array.isArray(meta.tags)
     ? meta.tags.map((item) => String(item).trim()).filter(Boolean)
     : [];
+  const relatedCountries = normalizeList(meta.related_countries);
+  const relatedProvinces = normalizeList(meta.related_provinces);
 
   return {
     title: meta.title ?? null,
@@ -229,6 +257,8 @@ const sanitizeMapMeta = (meta = {}) => {
     country_code: meta.country_code ?? null,
     country_name: meta.country_name ?? null,
     province: meta.province ?? null,
+    related_countries: relatedCountries,
+    related_provinces: relatedProvinces,
     city: meta.city ?? null,
     district: meta.district ?? null,
     latitude: meta.latitude ?? null,

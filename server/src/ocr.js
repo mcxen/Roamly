@@ -198,6 +198,8 @@ const deriveMetaFromText = (text) => {
       country_code: null,
       country_name: null,
       province: null,
+      related_countries: [],
+      related_provinces: [],
       city: null,
       district: null,
       latitude: null,
@@ -224,23 +226,21 @@ const deriveMetaFromText = (text) => {
     countries.push({ code: 'CN', name: '中国' });
   }
 
-  for (const country of countries) {
-    tags.push(country.name);
-  }
-
   const uniqueProvinces = Array.from(new Set(chinaMentions.provinces));
   const uniqueCities = Array.from(new Set(chinaMentions.cities));
   const isGlobal = GLOBAL_SCOPE_REGEX.test(value) || countries.length >= 2;
+  const relatedCountries = countries.map((item) => item.name).filter(Boolean);
+  const relatedProvinces = uniqueProvinces;
 
   if (isGlobal) {
-    tags.push('全球');
-    tags.push('国际');
     return {
       tags: Array.from(new Set(tags)).filter(Boolean),
       scope_level: 'international',
       country_code: 'WORLD',
       country_name: '全球',
       province: null,
+      related_countries: relatedCountries,
+      related_provinces: relatedProvinces,
       city: null,
       district: null,
       latitude: null,
@@ -256,6 +256,8 @@ const deriveMetaFromText = (text) => {
       country_code: country.code,
       country_name: country.name,
       province: null,
+      related_countries: relatedCountries,
+      related_provinces: relatedProvinces,
       city: null,
       district: null,
       latitude: null,
@@ -264,11 +266,6 @@ const deriveMetaFromText = (text) => {
   }
 
   if (country?.code === 'CN' || hasChinaIndicators) {
-    tags.push('中国');
-    for (const province of uniqueProvinces.slice(0, 8)) {
-      tags.push(province);
-    }
-
     if (uniqueProvinces.length >= 2) {
       return {
         tags: Array.from(new Set(tags)).filter(Boolean),
@@ -276,6 +273,8 @@ const deriveMetaFromText = (text) => {
         country_code: 'CN',
         country_name: '中国',
         province: null,
+        related_countries: relatedCountries.length ? relatedCountries : ['中国'],
+        related_provinces: relatedProvinces,
         city: null,
         district: null,
         latitude: null,
@@ -295,6 +294,8 @@ const deriveMetaFromText = (text) => {
       country_code: 'CN',
       country_name: '中国',
       province,
+      related_countries: relatedCountries.length ? relatedCountries : ['中国'],
+      related_provinces: relatedProvinces,
       city,
       district: null,
       latitude: coordinate?.latitude ?? null,
@@ -308,6 +309,8 @@ const deriveMetaFromText = (text) => {
     country_code: null,
     country_name: null,
     province: null,
+    related_countries: relatedCountries,
+    related_provinces: relatedProvinces,
     city: null,
     district: null,
     latitude: null,
@@ -415,6 +418,8 @@ const processQueue = async () => {
 
       const derived = deriveMetaFromText(text);
       const mergedTags = mergeArrayUnique(latest.tags, derived.tags);
+      const mergedRelatedCountries = mergeArrayUnique(latest.related_countries, derived.related_countries);
+      const mergedRelatedProvinces = mergeArrayUnique(latest.related_provinces, derived.related_provinces);
       const mergedLocation = mergeLocationByPriority(latest, derived);
 
       const nextMeta = {
@@ -427,6 +432,8 @@ const processQueue = async () => {
         country_code: mergedLocation.country_code,
         country_name: mergedLocation.country_name,
         province: mergedLocation.province,
+        related_countries: toTagsJson(mergedRelatedCountries),
+        related_provinces: toTagsJson(mergedRelatedProvinces),
         city: mergedLocation.city,
         district: mergedLocation.district,
         latitude: mergedLocation.latitude,
@@ -450,6 +457,8 @@ const processQueue = async () => {
           country_code: persistedRow.country_code,
           country_name: persistedRow.country_name,
           province: persistedRow.province,
+          related_countries: persistedRow.related_countries,
+          related_provinces: persistedRow.related_provinces,
           city: persistedRow.city,
           district: persistedRow.district,
           latitude: persistedRow.latitude,
