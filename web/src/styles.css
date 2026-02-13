@@ -486,6 +486,20 @@ body.resizing-panes * {
   background: #fff;
 }
 
+.right-pane .form-grid input,
+.right-pane .form-grid select,
+.right-pane .form-grid textarea {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border-color: #d9d2c7;
+  background: #fcfbf9;
+  font-size: 12px;
+}
+
+.right-pane .form-grid textarea {
+  min-height: 88px;
+}
+
 .toolbar button,
 .upload-row button,
 .pager button,
@@ -602,26 +616,62 @@ body.resizing-panes * {
 }
 
 .right-pane {
-  padding: 8px;
+  padding: 10px;
   overflow: auto;
+  background: #f7f6f2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-section {
+  background: #fff;
+  border: 1px solid #e2ddd4;
+  border-radius: 12px;
+  padding: 8px;
 }
 
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .detail-header h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  color: #2f2a25;
+}
+
+.right-pane .detail-header button {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #f4f2ee;
+  border-color: #d6cfc5;
 }
 
 .tab-row {
-  margin-top: 6px;
+  margin-top: 0;
   display: flex;
-  gap: 8px;
+  gap: 6px;
+}
+
+.right-pane .tab-row button {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: #f3f1ed;
+  border-color: #d6d0c6;
+  color: #4a4138;
+}
+
+.right-pane .tab-row button.active {
+  background: #e1e9e3;
+  border-color: #bcc9c1;
+  color: #2e4a39;
 }
 
 .preview {
@@ -637,7 +687,7 @@ body.resizing-panes * {
 }
 
 .preview-wrap {
-  margin-top: 8px;
+  margin-top: 0;
   position: relative;
   border: 1px solid #cfbda9;
   border-radius: 10px;
@@ -648,19 +698,19 @@ body.resizing-panes * {
 .preview-toolbar {
   display: flex;
   gap: 6px;
-  padding: 6px;
-  border-bottom: 1px solid #dccdbd;
-  background: #f8f1e8;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e1d8cb;
+  background: #f7f4ef;
 }
 
 .preview-toolbar button {
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 5px 8px;
+  border: 1px solid #d2c8bc;
+  background: #fdfbf7;
+  color: #3c2f25;
+  border-radius: 999px;
+  padding: 4px 10px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .preview-transform-wrapper {
@@ -689,19 +739,26 @@ body.resizing-panes * {
 }
 
 .file-meta {
-  margin-top: 6px;
+  margin-top: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   font-size: 11px;
-  color: var(--muted);
+  color: #5c5146;
+}
+
+.file-meta span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #e1dbd1;
+  background: #f5f2ee;
 }
 
 .form-grid {
-  margin-top: 8px;
+  margin-top: 6px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .form-grid.compact {
@@ -713,6 +770,10 @@ body.resizing-panes * {
 .form-grid.compact label {
   gap: 4px;
   font-size: 11px;
+}
+
+.right-pane .form-grid.compact label {
+  font-size: 10px;
 }
 
 .form-grid.compact input,
@@ -727,7 +788,7 @@ body.resizing-panes * {
   flex-direction: column;
   gap: 4px;
   font-size: 11px;
-  color: #453428;
+  color: #5a5148;
 }
 
 .form-grid .full {
@@ -745,6 +806,12 @@ body.resizing-panes * {
   align-items: center;
 }
 
+.right-pane .city-tools button {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 .city-tools select {
   width: 100%;
 }
@@ -753,6 +820,15 @@ body.resizing-panes * {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.right-pane .hints button {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: #f5f2ee;
+  border-color: #d8d1c6;
+  color: #4b4037;
 }
 
 .geo-map {
@@ -775,6 +851,13 @@ body.resizing-panes * {
   background: #925636;
   border-color: #6f3f27;
   color: #fff;
+}
+
+.right-pane .save-btn {
+  margin-top: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 .settings-mask {
@@ -909,7 +992,7 @@ body.resizing-panes * {
 
 .empty-detail {
   color: var(--muted);
-  padding: 20px;
+  padding: 10px;
   text-align: center;
 }
 
@@ -958,6 +1041,17 @@ body.resizing-panes * {
 
   .right-pane {
     max-height: none;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .detail-section {
+    padding: 6px;
+    border-radius: 10px;
+  }
+
+  .preview-transform-wrapper {
+    height: min(var(--detail-preview-height, 520px), 52vh);
   }
 
   .toolbar {

@@ -117,6 +117,10 @@ const DEFAULT_PANE_SIZES = {
   right: 620
 };
 
+const LAYOUT_MIN_CENTER = 420;
+const LAYOUT_COLUMN_GAP = 6;
+const LAYOUT_RESIZER_WIDTH = 8;
+const LAYOUT_GUTTERS = LAYOUT_RESIZER_WIDTH + LAYOUT_COLUMN_GAP * 2;
 const GLOBE_DOCK_MARGIN = 8;
 const GLOBE_TOGGLE_WIDTH = 34;
 const LAYOUT_BASE_PADDING = 10;
@@ -422,12 +426,22 @@ function App() {
   const [globeDock, setGlobeDock] = useState({ x: 12, y: 82, side: 'left' });
   const [globeSize, setGlobeSize] = useState({ width: 340, height: 520 });
   const [globeDragging, setGlobeDragging] = useState(false);
+  const [layoutContentWidth, setLayoutContentWidth] = useState(0);
 
   const layoutRef = useRef(null);
   const resizeStateRef = useRef(null);
   const globeRef = useRef(null);
   const globeDragRef = useRef(null);
   const globeDockRef = useRef(globeDock);
+
+  const getLayoutContentWidth = useCallback(() => {
+    const node = layoutRef.current;
+    if (!node || typeof window === 'undefined') return 0;
+    const styles = window.getComputedStyle(node);
+    const paddingLeft = Number.parseFloat(styles.paddingLeft) || 0;
+    const paddingRight = Number.parseFloat(styles.paddingRight) || 0;
+    return Math.max(0, node.clientWidth - paddingLeft - paddingRight);
+  }, []);
 
   const selectedSummary = useMemo(() => maps.find((item) => item.id === selectedId) || null, [maps, selectedId]);
   const detailImageSrc = useMemo(() => {
@@ -467,11 +481,22 @@ function App() {
     ? (globeOpen ? Math.max(0, globeSize.width + GLOBE_TOGGLE_OFFSET) : GLOBE_TOGGLE_OFFSET)
     : 0;
 
+  const maxRightPaneWidth = useMemo(() => {
+    if (!layoutContentWidth) return 900;
+    const available = layoutContentWidth - LAYOUT_MIN_CENTER - LAYOUT_GUTTERS;
+    return Math.max(360, Math.min(900, available));
+  }, [layoutContentWidth]);
+
+  const rightPaneWidth = useMemo(() => {
+    const preferred = Number(paneSizes.right) || DEFAULT_PANE_SIZES.right;
+    return clamp(preferred, 360, maxRightPaneWidth || 900);
+  }, [paneSizes.right, maxRightPaneWidth]);
+
   const layoutStyle = useMemo(() => ({
-    '--right-pane-width': `${clamp(Number(paneSizes.right) || DEFAULT_PANE_SIZES.right, 360, 900)}px`,
+    '--right-pane-width': `${rightPaneWidth}px`,
     '--globe-offset-left': `${globeOffsetLeft}px`,
     '--globe-offset-right': `${globeOffsetRight}px`
-  }), [paneSizes.right, globeOffsetLeft, globeOffsetRight]);
+  }), [rightPaneWidth, globeOffsetLeft, globeOffsetRight]);
 
   const provinceOptions = useMemo(() => {
     const items = Array.isArray(facets.province) ? facets.province : [];
@@ -849,7 +874,7 @@ function App() {
     resizeStateRef.current = {
       pane,
       startX: event.clientX,
-      startRight: clamp(Number(paneSizes.right) || DEFAULT_PANE_SIZES.right, 360, 900)
+      startRight: rightPaneWidth
     };
     setResizingPane(pane);
   };
@@ -1034,6 +1059,31 @@ function App() {
     localStorage.setItem('roamly-page-size', String(pageSize));
   }, [pageSize]);
 
+  const measureLayout = useCallback(() => {
+    const width = getLayoutContentWidth();
+    if (!width) return;
+    setLayoutContentWidth(width);
+  }, [getLayoutContentWidth]);
+
+  useEffect(() => {
+    measureLayout();
+  }, [measureLayout, globeOffsetLeft, globeOffsetRight]);
+
+  useEffect(() => {
+    const node = layoutRef.current;
+    if (!node) return;
+    let observer;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => measureLayout());
+      observer.observe(node);
+    }
+    window.addEventListener('resize', measureLayout);
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener('resize', measureLayout);
+    };
+  }, [measureLayout]);
+
   useEffect(() => {
     if (page > totalPages) {
       setPage(totalPages);
@@ -1049,12 +1099,10 @@ function App() {
       const state = resizeStateRef.current;
       if (!state) return;
 
-      const totalWidth = layoutRef.current?.clientWidth || window.innerWidth;
-      const minCenterWidth = 420;
-      const gutters = 20;
+      const totalWidth = getLayoutContentWidth() || window.innerWidth;
       const deltaX = event.clientX - state.startX;
 
-      const maxRight = Math.max(380, totalWidth - minCenterWidth - gutters);
+      const maxRight = Math.max(360, Math.min(900, totalWidth - LAYOUT_MIN_CENTER - LAYOUT_GUTTERS));
       const nextRight = clamp(state.startRight - deltaX, 360, maxRight);
       setPaneSizes((prev) => ({ ...prev, right: nextRight }));
     };
@@ -1368,7 +1416,7 @@ function App() {
         />
 
         <aside className="right-pane pane">
-          <div className="detail-header">
+          <div className="detail-header detail-section">
             <h3>{selectedSummary?.title || '未选择地图'}</h3>
             <button onClick={toggleFavorite} disabled={!selectedSummary}>
               {selectedSummary?.favorite ? '取消收藏' : '加入收藏'}
@@ -1377,236 +1425,242 @@ function App() {
 
           {selectedMap ? (
             <>
-              <div className="preview-wrap" style={previewPanelStyle}>
-                <TransformWrapper
-                  key={selectedMap.id}
-                  initialScale={1}
-                  minScale={0.3}
-                  maxScale={18}
-                  centerOnInit
-                  smooth={false}
-                  wheel={{
-                    step: 0.16,
-                    smoothStep: 0.005,
-                    touchPadDisabled: false,
-                    wheelDisabled: false
-                  }}
-                  pinch={{ step: 4 }}
-                  zoomAnimation={{ disabled: true }}
-                  alignmentAnimation={{ disabled: true }}
-                  velocityAnimation={{ disabled: true }}
-                  panning={{ velocityDisabled: true }}
-                  doubleClick={{
-                    mode: 'zoomIn',
-                    step: 1.4,
-                    animationTime: 80
-                  }}
-                >
-                  {({ zoomIn, zoomOut, resetTransform }) => (
-                    <>
-                      <div className="preview-toolbar">
-                        <button onClick={() => zoomIn()}>放大</button>
-                        <button onClick={() => zoomOut()}>缩小</button>
-                        <button onClick={() => resetTransform()}>重置</button>
-                        <button onClick={() => setViewerOpen(true)}>全屏查看</button>
-                      </div>
-                      <TransformComponent
-                        wrapperClass="preview-transform-wrapper"
-                        contentClass="preview-transform-content"
-                      >
-                        <img
-                          className="preview"
-                          src={detailImageSrc}
-                          alt={selectedMap.title || selectedMap.file_name}
-                          loading="eager"
-                          decoding="async"
-                        />
-                      </TransformComponent>
-                    </>
-                  )}
-                </TransformWrapper>
-                <div className="preview-tip">触控板/滚轮可缩放，拖拽可平移</div>
-              </div>
-
-              <div className="file-meta">
-                <span>ID: {selectedMap.id.slice(0, 12)}</span>
-                <span>{selectedMap.width || '-'} x {selectedMap.height || '-'}</span>
-                <span>{selectedMap.mime || '-'}</span>
-                <span>{formatBytes(selectedMap.size_bytes)}</span>
-                <span>{formatDate(selectedMap.mtime_ms)}</span>
-                <span>OCR: {selectedMap.ocr_status || 'pending'}</span>
-              </div>
-
-              <div className="tab-row">
-                <button
-                  className={activeTab === 'content' ? 'active' : ''}
-                  onClick={() => setActiveTab('content')}
-                >内容</button>
-                <button
-                  className={activeTab === 'geo' ? 'active' : ''}
-                  onClick={() => setActiveTab('geo')}
-                >定位</button>
-              </div>
-
-              {activeTab === 'content' ? (
-                <div className="form-grid">
-                  <label>
-                    标题
-                    <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-                  </label>
-                  <label>
-                    收藏单位
-                    <input value={form.collection_unit} onChange={(e) => setForm({ ...form, collection_unit: e.target.value })} />
-                  </label>
-                  <label>
-                    年代
-                    <input value={form.year_label} onChange={(e) => setForm({ ...form, year_label: e.target.value })} />
-                  </label>
-                  <label>
-                    标签
-                    <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="多个标签用逗号分隔" />
-                  </label>
-                  <label className="full">
-                    简介
-                    <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
-                  </label>
-                </div>
-              ) : (
-                <div className="form-grid compact">
-                  <label>
-                    范围
-                    <select value={form.scope_level} onChange={(e) => setForm({ ...form, scope_level: e.target.value })}>
-                      <option value="">未设置</option>
-                      <option value="national">国家级</option>
-                      <option value="international">国际</option>
-                    </select>
-                  </label>
-                  <label>
-                    国家代码
-                    <input value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value })} />
-                  </label>
-                  <label>
-                    国家
-                    <input value={form.country_name} onChange={(e) => setForm({ ...form, country_name: e.target.value })} />
-                  </label>
-                  <label>
-                    省/州（可多个，用逗号分隔）
-                    <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
-                  </label>
-                  <label>
-                    关联国家（可多个，用逗号分隔）
-                    <input
-                      value={form.related_countries}
-                      placeholder="日本, 中国"
-                      onChange={(e) => setForm({ ...form, related_countries: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    关联省份（可多个，用逗号分隔）
-                    <input
-                      value={form.related_provinces}
-                      placeholder="黑龙江, 吉林"
-                      onChange={(e) => setForm({ ...form, related_provinces: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    市（可多个，用逗号分隔；单城市可自动匹配）
-                    <input
-                      value={form.city}
-                      list="china-city-datalist"
-                      onChange={(e) => setForm({ ...form, city: e.target.value })}
-                      onBlur={() => resolveCityFromInput(form.city)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          resolveCityFromInput(form.city);
-                        }
-                      }}
-                    />
-                    <datalist id="china-city-datalist">
-                      {chinaCityOptions.map((item) => (
-                        <option key={`${item.province}-${item.city}`} value={item.city}>{item.province} / {item.city}</option>
-                      ))}
-                    </datalist>
-                  </label>
-                  <label>
-                    区县
-                    <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
-                  </label>
-                  <label>
-                    纬度
-                    <input value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} />
-                  </label>
-                  <label>
-                    经度
-                    <input value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} />
-                  </label>
-
-                  <div className="full city-tools">
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (!value) return;
-                        const [province, city] = value.split('|');
-                        const item = chinaCityOptions.find((it) => it.province === province && it.city === city);
-                        if (item) {
-                          applyHint({
-                            ...item,
-                            scope_level: 'national'
-                          }, false);
-                        }
-                      }}
-                    >
-                      <option value="">从地级市列表快速选择</option>
-                      {chinaCityOptions.map((item) => (
-                        <option key={`${item.province}|${item.city}`} value={`${item.province}|${item.city}`}>
-                          {item.province} / {item.city}
-                        </option>
-                      ))}
-                    </select>
-                    <button onClick={() => resolveCityFromInput(form.city)} disabled={cityResolveBusy || !form.city.trim()}>
-                      {cityResolveBusy ? '匹配中...' : '自动匹配地级市'}
-                    </button>
-                  </div>
-
-                  {locationHints.length > 0 ? (
-                    <div className="full hints">
-                      {locationHints.map((item) => (
-                        <button key={`${item.country_code}-${item.city}-${item.latitude}`} onClick={() => applyHint(item)}>
-                          {item.country_name} / {item.province} / {item.city}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="full geo-map">
-                    {form.latitude && form.longitude ? (
-                      <MapContainer
-                        center={[Number(form.latitude), Number(form.longitude)]}
-                        zoom={8}
-                        scrollWheelZoom
-                        style={{ height: 200, width: '100%' }}
-                      >
-                        <TileLayer
-                          attribution='&copy; OpenStreetMap contributors'
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        <Marker position={[Number(form.latitude), Number(form.longitude)]}>
-                          <Popup>{form.city || form.country_name || '地图定位'}</Popup>
-                        </Marker>
-                      </MapContainer>
-                    ) : (
-                      <div className="geo-empty">填写经纬度后显示定位</div>
+              <section className="detail-section preview-section">
+                <div className="preview-wrap" style={previewPanelStyle}>
+                  <TransformWrapper
+                    key={selectedMap.id}
+                    initialScale={1}
+                    minScale={0.3}
+                    maxScale={18}
+                    centerOnInit
+                    smooth={false}
+                    wheel={{
+                      step: 0.16,
+                      smoothStep: 0.005,
+                      touchPadDisabled: false,
+                      wheelDisabled: false
+                    }}
+                    pinch={{ step: 4 }}
+                    zoomAnimation={{ disabled: true }}
+                    alignmentAnimation={{ disabled: true }}
+                    velocityAnimation={{ disabled: true }}
+                    panning={{ velocityDisabled: true }}
+                    doubleClick={{
+                      mode: 'zoomIn',
+                      step: 1.4,
+                      animationTime: 80
+                    }}
+                  >
+                    {({ zoomIn, zoomOut, resetTransform }) => (
+                      <>
+                        <div className="preview-toolbar">
+                          <button onClick={() => zoomIn()}>放大</button>
+                          <button onClick={() => zoomOut()}>缩小</button>
+                          <button onClick={() => resetTransform()}>重置</button>
+                          <button onClick={() => setViewerOpen(true)}>全屏查看</button>
+                        </div>
+                        <TransformComponent
+                          wrapperClass="preview-transform-wrapper"
+                          contentClass="preview-transform-content"
+                        >
+                          <img
+                            className="preview"
+                            src={detailImageSrc}
+                            alt={selectedMap.title || selectedMap.file_name}
+                            loading="eager"
+                            decoding="async"
+                          />
+                        </TransformComponent>
+                      </>
                     )}
-                  </div>
+                  </TransformWrapper>
+                  <div className="preview-tip">触控板/滚轮可缩放，拖拽可平移</div>
                 </div>
-              )}
+              </section>
+
+              <section className="detail-section meta-section">
+                <div className="file-meta">
+                  <span>ID: {selectedMap.id.slice(0, 12)}</span>
+                  <span>{selectedMap.width || '-'} x {selectedMap.height || '-'}</span>
+                  <span>{selectedMap.mime || '-'}</span>
+                  <span>{formatBytes(selectedMap.size_bytes)}</span>
+                  <span>{formatDate(selectedMap.mtime_ms)}</span>
+                  <span>OCR: {selectedMap.ocr_status || 'pending'}</span>
+                </div>
+              </section>
+
+              <section className="detail-section form-section">
+                <div className="tab-row">
+                  <button
+                    className={activeTab === 'content' ? 'active' : ''}
+                    onClick={() => setActiveTab('content')}
+                  >内容</button>
+                  <button
+                    className={activeTab === 'geo' ? 'active' : ''}
+                    onClick={() => setActiveTab('geo')}
+                  >定位</button>
+                </div>
+
+                {activeTab === 'content' ? (
+                  <div className="form-grid">
+                    <label>
+                      标题
+                      <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                    </label>
+                    <label>
+                      收藏单位
+                      <input value={form.collection_unit} onChange={(e) => setForm({ ...form, collection_unit: e.target.value })} />
+                    </label>
+                    <label>
+                      年代
+                      <input value={form.year_label} onChange={(e) => setForm({ ...form, year_label: e.target.value })} />
+                    </label>
+                    <label>
+                      标签
+                      <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="多个标签用逗号分隔" />
+                    </label>
+                    <label className="full">
+                      简介
+                      <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="form-grid compact">
+                    <label>
+                      范围
+                      <select value={form.scope_level} onChange={(e) => setForm({ ...form, scope_level: e.target.value })}>
+                        <option value="">未设置</option>
+                        <option value="national">国家级</option>
+                        <option value="international">国际</option>
+                      </select>
+                    </label>
+                    <label>
+                      国家代码
+                      <input value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value })} />
+                    </label>
+                    <label>
+                      国家
+                      <input value={form.country_name} onChange={(e) => setForm({ ...form, country_name: e.target.value })} />
+                    </label>
+                    <label>
+                      省/州（可多个，用逗号分隔）
+                      <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
+                    </label>
+                    <label>
+                      关联国家（可多个，用逗号分隔）
+                      <input
+                        value={form.related_countries}
+                        placeholder="日本, 中国"
+                        onChange={(e) => setForm({ ...form, related_countries: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      关联省份（可多个，用逗号分隔）
+                      <input
+                        value={form.related_provinces}
+                        placeholder="黑龙江, 吉林"
+                        onChange={(e) => setForm({ ...form, related_provinces: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      市（可多个，用逗号分隔；单城市可自动匹配）
+                      <input
+                        value={form.city}
+                        list="china-city-datalist"
+                        onChange={(e) => setForm({ ...form, city: e.target.value })}
+                        onBlur={() => resolveCityFromInput(form.city)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            resolveCityFromInput(form.city);
+                          }
+                        }}
+                      />
+                      <datalist id="china-city-datalist">
+                        {chinaCityOptions.map((item) => (
+                          <option key={`${item.province}-${item.city}`} value={item.city}>{item.province} / {item.city}</option>
+                        ))}
+                      </datalist>
+                    </label>
+                    <label>
+                      区县
+                      <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
+                    </label>
+                    <label>
+                      纬度
+                      <input value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} />
+                    </label>
+                    <label>
+                      经度
+                      <input value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} />
+                    </label>
+
+                    <div className="full city-tools">
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (!value) return;
+                          const [province, city] = value.split('|');
+                          const item = chinaCityOptions.find((it) => it.province === province && it.city === city);
+                          if (item) {
+                            applyHint({
+                              ...item,
+                              scope_level: 'national'
+                            }, false);
+                          }
+                        }}
+                      >
+                        <option value="">从地级市列表快速选择</option>
+                        {chinaCityOptions.map((item) => (
+                          <option key={`${item.province}|${item.city}`} value={`${item.province}|${item.city}`}>
+                            {item.province} / {item.city}
+                          </option>
+                        ))}
+                      </select>
+                      <button onClick={() => resolveCityFromInput(form.city)} disabled={cityResolveBusy || !form.city.trim()}>
+                        {cityResolveBusy ? '匹配中...' : '自动匹配地级市'}
+                      </button>
+                    </div>
+
+                    {locationHints.length > 0 ? (
+                      <div className="full hints">
+                        {locationHints.map((item) => (
+                          <button key={`${item.country_code}-${item.city}-${item.latitude}`} onClick={() => applyHint(item)}>
+                            {item.country_name} / {item.province} / {item.city}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="full geo-map">
+                      {form.latitude && form.longitude ? (
+                        <MapContainer
+                          center={[Number(form.latitude), Number(form.longitude)]}
+                          zoom={8}
+                          scrollWheelZoom
+                          style={{ height: 200, width: '100%' }}
+                        >
+                          <TileLayer
+                            attribution='&copy; OpenStreetMap contributors'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          />
+                          <Marker position={[Number(form.latitude), Number(form.longitude)]}>
+                            <Popup>{form.city || form.country_name || '地图定位'}</Popup>
+                          </Marker>
+                        </MapContainer>
+                      ) : (
+                        <div className="geo-empty">填写经纬度后显示定位</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
 
               <button className="save-btn" onClick={handleSave} disabled={busy}>保存地图信息</button>
             </>
           ) : (
-            <div className="empty-detail">从中间选择一张地图查看详情</div>
+            <div className="empty-detail detail-section">从中间选择一张地图查看详情</div>
           )}
         </aside>
       </main>
