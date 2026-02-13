@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
-import 'echarts-gl';
 import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import { geoContains, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
@@ -88,10 +87,24 @@ const normalizeChinaProvince = (value) => {
   return raw.replace(/(省|市|自治区|特别行政区|壮族自治区|回族自治区|维吾尔自治区)$/u, '');
 };
 
-const REGION_3D_CONFIGS = [
+const filterUSContiguous = (geojson) => {
+  if (!geojson || !Array.isArray(geojson.features)) return geojson;
+  const excludedIds = new Set(['02', '15', '72']);
+  const excludedNames = new Set(['Alaska', 'Hawaii', 'Puerto Rico']);
+  const features = geojson.features.filter((item) => {
+    const id = item?.id ? String(item.id).padStart(2, '0') : '';
+    const name = String(item?.properties?.name || '');
+    if (excludedIds.has(id)) return false;
+    if (excludedNames.has(name)) return false;
+    return true;
+  });
+  return { ...geojson, features };
+};
+
+const REGION_2D_CONFIGS = [
   {
     key: 'china',
-    label: '中国省份 3D',
+    label: '中国省份 2D',
     matches: ['中国', 'china', 'China'],
     mapName: 'china-provinces',
     geojson: chinaGeoJson,
@@ -99,29 +112,29 @@ const REGION_3D_CONFIGS = [
   },
   {
     key: 'us',
-    label: '美国州级 3D',
+    label: '美国本土州级 2D',
     matches: ['美国', 'us', 'usa', 'United States', 'United States of America'],
-    mapName: 'us-states',
-    geojson: US_STATES_GEOJSON,
+    mapName: 'us-states-contiguous',
+    geojson: filterUSContiguous(US_STATES_GEOJSON),
     normalize: (value) => String(value || '').trim()
   },
   {
     key: 'japan',
-    label: '日本都道府县 3D',
+    label: '日本都道府县 2D',
     matches: ['日本', 'japan', 'Japan'],
     mapName: 'japan-pref',
     geojson: null,
     normalize: (value) => String(value || '').trim(),
-    emptyHint: '缺少日本都道府县边界数据，补充 GeoJSON 后即可启用 3D。'
+    emptyHint: '缺少日本都道府县边界数据，补充 GeoJSON 后即可启用 2D。'
   },
   {
     key: 'russia',
-    label: '俄罗斯联邦主体 3D',
+    label: '俄罗斯联邦主体 2D',
     matches: ['俄罗斯', 'russia', 'Russia', 'Russian Federation'],
     mapName: 'russia-subjects',
     geojson: null,
     normalize: (value) => String(value || '').trim(),
-    emptyHint: '缺少俄罗斯联邦主体边界数据，补充 GeoJSON 后即可启用 3D。'
+    emptyHint: '缺少俄罗斯联邦主体边界数据，补充 GeoJSON 后即可启用 2D。'
   }
 ];
 
@@ -212,7 +225,7 @@ const resolveRegionConfig = (country) => {
   const raw = String(country || '').trim();
   if (!raw) return null;
   const lower = raw.toLowerCase();
-  return REGION_3D_CONFIGS.find((item) =>
+  return REGION_2D_CONFIGS.find((item) =>
     item.matches.some((value) => String(value).toLowerCase() === lower)
   ) || null;
 };
@@ -456,7 +469,7 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
   );
 }
 
-function Region3DMap({ config, data, onPickRegion }) {
+function Region2DMap({ config, data, onPickRegion }) {
   useEffect(() => {
     if (config?.geojson) {
       ensureMapRegistered(config.mapName, config.geojson);
@@ -487,11 +500,10 @@ function Region3DMap({ config, data, onPickRegion }) {
       },
       series: [
         {
-          type: 'map3D',
+          type: 'map',
           map: config.mapName,
           data,
-          regionHeight: 2.2,
-          shading: 'realistic',
+          roam: false,
           label: {
             show: false
           },
@@ -503,31 +515,12 @@ function Region3DMap({ config, data, onPickRegion }) {
           emphasis: {
             label: {
               show: true,
-              color: '#ffffff',
+              color: '#2f3a33',
               fontSize: 10
             },
             itemStyle: {
               areaColor: '#5b9170'
             }
-          },
-          light: {
-            main: {
-              intensity: 1.1,
-              shadow: true,
-              alpha: 40
-            },
-            ambient: {
-              intensity: 0.3
-            }
-          },
-          viewControl: {
-            distance: 90,
-            alpha: 32,
-            beta: 0,
-            minDistance: 45,
-            maxDistance: 140,
-            rotateSensitivity: 1,
-            zoomSensitivity: 1
           }
         }
       ]
@@ -537,8 +530,8 @@ function Region3DMap({ config, data, onPickRegion }) {
   if (!config) return null;
   if (!config.geojson) {
     return (
-      <div className="region-3d-empty">
-        {config.emptyHint || '暂无省级边界数据，补充 GeoJSON 后即可启用 3D。'}
+      <div className="region-2d-empty">
+        {config.emptyHint || '暂无省级边界数据，补充 GeoJSON 后即可启用 2D。'}
       </div>
     );
   }
@@ -716,11 +709,11 @@ function App() {
     ? provinceOptions
     : (isChinaSelected ? fallbackChinaProvinces : []);
 
-  const region3DConfig = useMemo(() => resolveRegionConfig(filters.country), [filters.country]);
-  const region3DData = useMemo(() => {
-    if (!region3DConfig) return [];
+  const region2DConfig = useMemo(() => resolveRegionConfig(filters.country), [filters.country]);
+  const region2DData = useMemo(() => {
+    if (!region2DConfig) return [];
     const items = Array.isArray(facets.province) ? facets.province : [];
-    const normalize = region3DConfig.normalize || ((value) => String(value || '').trim());
+    const normalize = region2DConfig.normalize || ((value) => String(value || '').trim());
     const counts = new Map();
 
     for (const item of items) {
@@ -735,7 +728,7 @@ function App() {
     }
 
     return Array.from(counts, ([name, value]) => ({ name, value }));
-  }, [facets.province, region3DConfig]);
+  }, [facets.province, region2DConfig]);
 
   useEffect(() => {
     globeDockRef.current = globeDock;
@@ -1477,15 +1470,15 @@ function App() {
               清空省份
             </button>
           </div>
-          {region3DConfig ? (
-            <div className="region-3d-panel">
-              <div className="region-3d-head">
-                <span>{region3DConfig.label}</span>
-                <span className="region-3d-sub">点击区域直接筛选</span>
+          {region2DConfig ? (
+            <div className="region-2d-panel">
+              <div className="region-2d-head">
+                <span>{region2DConfig.label}</span>
+                <span className="region-2d-sub">点击区域直接筛选</span>
               </div>
-              <Region3DMap
-                config={region3DConfig}
-                data={region3DData}
+              <Region2DMap
+                config={region2DConfig}
+                data={region2DData}
                 onPickRegion={(name) => patchFilters({ province: name, city: '' })}
               />
             </div>

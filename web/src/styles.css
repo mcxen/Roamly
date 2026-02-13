@@ -369,7 +369,7 @@ body.resizing-panes * {
   width: 100%;
 }
 
-.region-3d-panel {
+.region-2d-panel {
   margin-top: 8px;
   border: 1px solid #e0d9cf;
   border-radius: 10px;
@@ -379,7 +379,7 @@ body.resizing-panes * {
   gap: 6px;
 }
 
-.region-3d-head {
+.region-2d-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -388,12 +388,12 @@ body.resizing-panes * {
   gap: 8px;
 }
 
-.region-3d-sub {
+.region-2d-sub {
   font-size: 11px;
   color: var(--muted);
 }
 
-.region-3d-empty {
+.region-2d-empty {
   border-radius: 8px;
   background: #f3f1ed;
   color: #776f66;
@@ -983,7 +983,7 @@ body.resizing-panes * {
     padding: 6px;
   }
 
-  .region-3d-panel {
+  .region-2d-panel {
     padding: 6px;
   }
 
