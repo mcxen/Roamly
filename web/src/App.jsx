@@ -1,25 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
-import L from 'leaflet';
-import marker2x from 'leaflet/dist/images/marker-icon-2x.png';
-import marker from 'leaflet/dist/images/marker-icon.png';
-import shadow from 'leaflet/dist/images/marker-shadow.png';
+import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
+import 'echarts-gl';
 import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import { geoContains, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
+import chinaGeoJson from 'china-map-geojson/src/china.js';
+import usAtlasData from 'us-atlas/states-10m.json';
 import worldAtlasData from 'world-atlas/countries-110m.json';
 import { api } from './api.js';
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: marker2x,
-  iconUrl: marker,
-  shadowUrl: shadow
-});
 
 const WORLD_FEATURES = feature(
   worldAtlasData,
   worldAtlasData?.objects?.countries
 )?.features || [];
+
+const US_STATES_GEOJSON = usAtlasData?.objects?.states
+  ? feature(usAtlasData, usAtlasData.objects.states)
+  : null;
+
+const REGISTERED_MAPS = new Set();
+const ensureMapRegistered = (name, geojson) => {
+  if (!name || !geojson || REGISTERED_MAPS.has(name)) return;
+  echarts.registerMap(name, geojson);
+  REGISTERED_MAPS.add(name);
+};
 
 const COUNTRY_NAME_ZH = {
   China: '中国',
@@ -60,6 +65,65 @@ const COUNTRY_NAME_ZH = {
   Chile: '智利',
   Peru: '秘鲁'
 };
+
+const CHINA_PROVINCE_ALIASES = new Map([
+  ['内蒙古自治区', '内蒙古'],
+  ['广西壮族自治区', '广西'],
+  ['宁夏回族自治区', '宁夏'],
+  ['新疆维吾尔自治区', '新疆'],
+  ['西藏自治区', '西藏'],
+  ['香港特别行政区', '香港'],
+  ['澳门特别行政区', '澳门'],
+  ['北京市', '北京'],
+  ['天津市', '天津'],
+  ['上海市', '上海'],
+  ['重庆市', '重庆'],
+  ['台湾省', '台湾']
+]);
+
+const normalizeChinaProvince = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (CHINA_PROVINCE_ALIASES.has(raw)) return CHINA_PROVINCE_ALIASES.get(raw);
+  return raw.replace(/(省|市|自治区|特别行政区|壮族自治区|回族自治区|维吾尔自治区)$/u, '');
+};
+
+const REGION_3D_CONFIGS = [
+  {
+    key: 'china',
+    label: '中国省份 3D',
+    matches: ['中国', 'china', 'China'],
+    mapName: 'china-provinces',
+    geojson: chinaGeoJson,
+    normalize: normalizeChinaProvince
+  },
+  {
+    key: 'us',
+    label: '美国州级 3D',
+    matches: ['美国', 'us', 'usa', 'United States', 'United States of America'],
+    mapName: 'us-states',
+    geojson: US_STATES_GEOJSON,
+    normalize: (value) => String(value || '').trim()
+  },
+  {
+    key: 'japan',
+    label: '日本都道府县 3D',
+    matches: ['日本', 'japan', 'Japan'],
+    mapName: 'japan-pref',
+    geojson: null,
+    normalize: (value) => String(value || '').trim(),
+    emptyHint: '缺少日本都道府县边界数据，补充 GeoJSON 后即可启用 3D。'
+  },
+  {
+    key: 'russia',
+    label: '俄罗斯联邦主体 3D',
+    matches: ['俄罗斯', 'russia', 'Russia', 'Russian Federation'],
+    mapName: 'russia-subjects',
+    geojson: null,
+    normalize: (value) => String(value || '').trim(),
+    emptyHint: '缺少俄罗斯联邦主体边界数据，补充 GeoJSON 后即可启用 3D。'
+  }
+];
 
 const toCountryLabel = (name) => {
   const raw = String(name || '').trim();
@@ -142,6 +206,15 @@ const joinMultiValue = (value) => {
   if (!value) return '';
   if (Array.isArray(value)) return value.filter(Boolean).join(', ');
   return String(value);
+};
+
+const resolveRegionConfig = (country) => {
+  const raw = String(country || '').trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  return REGION_3D_CONFIGS.find((item) =>
+    item.matches.some((value) => String(value).toLowerCase() === lower)
+  ) || null;
 };
 
 const loadJsonFromStorage = (key, fallbackValue) => {
@@ -383,6 +456,114 @@ function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
   );
 }
 
+function Region3DMap({ config, data, onPickRegion }) {
+  useEffect(() => {
+    if (config?.geojson) {
+      ensureMapRegistered(config.mapName, config.geojson);
+    }
+  }, [config]);
+
+  const option = useMemo(() => {
+    if (!config) return null;
+    const values = data.map((item) => item.value || 0);
+    const maxValue = values.length ? Math.max(...values) : 0;
+    const visualMax = Math.max(1, maxValue);
+
+    return {
+      tooltip: {
+        trigger: 'item',
+        formatter: (params) => {
+          const value = params?.value ?? 0;
+          return `${params.name || ''} ${value || 0}`;
+        }
+      },
+      visualMap: {
+        min: 0,
+        max: visualMax,
+        show: false,
+        inRange: {
+          color: ['#edf2ee', '#b9d3c0', '#5b9170']
+        }
+      },
+      series: [
+        {
+          type: 'map3D',
+          map: config.mapName,
+          data,
+          regionHeight: 2.2,
+          shading: 'realistic',
+          label: {
+            show: false
+          },
+          itemStyle: {
+            areaColor: '#edf2ee',
+            borderColor: '#9aa89a',
+            borderWidth: 0.6
+          },
+          emphasis: {
+            label: {
+              show: true,
+              color: '#ffffff',
+              fontSize: 10
+            },
+            itemStyle: {
+              areaColor: '#5b9170'
+            }
+          },
+          light: {
+            main: {
+              intensity: 1.1,
+              shadow: true,
+              alpha: 40
+            },
+            ambient: {
+              intensity: 0.3
+            }
+          },
+          viewControl: {
+            distance: 90,
+            alpha: 32,
+            beta: 0,
+            minDistance: 45,
+            maxDistance: 140,
+            rotateSensitivity: 1,
+            zoomSensitivity: 1
+          }
+        }
+      ]
+    };
+  }, [config, data]);
+
+  if (!config) return null;
+  if (!config.geojson) {
+    return (
+      <div className="region-3d-empty">
+        {config.emptyHint || '暂无省级边界数据，补充 GeoJSON 后即可启用 3D。'}
+      </div>
+    );
+  }
+  if (!option) return null;
+
+  return (
+    <ReactECharts
+      echarts={echarts}
+      option={option}
+      style={{ height: 240, width: '100%' }}
+      notMerge
+      lazyUpdate
+      onEvents={onPickRegion
+        ? {
+          click: (params) => {
+            if (params?.name) {
+              onPickRegion(params.name);
+            }
+          }
+        }
+        : undefined}
+    />
+  );
+}
+
 function App() {
   const [status, setStatus] = useState(null);
   const [ocrStatus, setOcrStatus] = useState(null);
@@ -415,7 +596,6 @@ function App() {
     children: []
   });
   const [storageForm, setStorageForm] = useState(DEFAULT_STORAGE_FORM);
-  const [activeTab, setActiveTab] = useState('content');
   const [viewerOpen, setViewerOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -535,6 +715,27 @@ function App() {
   const effectiveProvinceOptions = provinceOptions.length
     ? provinceOptions
     : (isChinaSelected ? fallbackChinaProvinces : []);
+
+  const region3DConfig = useMemo(() => resolveRegionConfig(filters.country), [filters.country]);
+  const region3DData = useMemo(() => {
+    if (!region3DConfig) return [];
+    const items = Array.isArray(facets.province) ? facets.province : [];
+    const normalize = region3DConfig.normalize || ((value) => String(value || '').trim());
+    const counts = new Map();
+
+    for (const item of items) {
+      const raw = String(item?.value || '').trim();
+      if (!raw) continue;
+      const isUnknown = raw.toLowerCase() === 'unknown' || raw === '未知' || raw === '未设置';
+      if (isUnknown) continue;
+      const normalized = normalize(raw);
+      if (!normalized) continue;
+      const nextValue = (counts.get(normalized) || 0) + (item?.count || 0);
+      counts.set(normalized, nextValue);
+    }
+
+    return Array.from(counts, ([name, value]) => ({ name, value }));
+  }, [facets.province, region3DConfig]);
 
   useEffect(() => {
     globeDockRef.current = globeDock;
@@ -1276,6 +1477,19 @@ function App() {
               清空省份
             </button>
           </div>
+          {region3DConfig ? (
+            <div className="region-3d-panel">
+              <div className="region-3d-head">
+                <span>{region3DConfig.label}</span>
+                <span className="region-3d-sub">点击区域直接筛选</span>
+              </div>
+              <Region3DMap
+                config={region3DConfig}
+                data={region3DData}
+                onPickRegion={(name) => patchFilters({ province: name, city: '' })}
+              />
+            </div>
+          ) : null}
           <div className="china-tip">点击地球国家可筛选包含该国家的地图；选择后可继续筛选省份/州（含中国省份）。</div>
         </div>
       </div>
@@ -1490,30 +1704,20 @@ function App() {
               </section>
 
               <section className="detail-section form-section">
-                <div className="tab-row">
-                  <button
-                    className={activeTab === 'content' ? 'active' : ''}
-                    onClick={() => setActiveTab('content')}
-                  >内容</button>
-                  <button
-                    className={activeTab === 'geo' ? 'active' : ''}
-                    onClick={() => setActiveTab('geo')}
-                  >定位</button>
-                </div>
-
-                {activeTab === 'content' ? (
+                <div className="form-block">
+                  <div className="form-block-title">内容信息</div>
                   <div className="form-grid">
                     <label>
                       标题
                       <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
                     </label>
                     <label>
-                      收藏单位
-                      <input value={form.collection_unit} onChange={(e) => setForm({ ...form, collection_unit: e.target.value })} />
-                    </label>
-                    <label>
                       年代
                       <input value={form.year_label} onChange={(e) => setForm({ ...form, year_label: e.target.value })} />
+                    </label>
+                    <label>
+                      收藏单位
+                      <input value={form.collection_unit} onChange={(e) => setForm({ ...form, collection_unit: e.target.value })} />
                     </label>
                     <label>
                       标签
@@ -1524,7 +1728,10 @@ function App() {
                       <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
                     </label>
                   </div>
-                ) : (
+                </div>
+
+                <div className="form-block">
+                  <div className="form-block-title">定位与范围</div>
                   <div className="form-grid compact">
                     <label>
                       范围
@@ -1535,32 +1742,16 @@ function App() {
                       </select>
                     </label>
                     <label>
-                      国家代码
-                      <input value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value })} />
-                    </label>
-                    <label>
                       国家
                       <input value={form.country_name} onChange={(e) => setForm({ ...form, country_name: e.target.value })} />
                     </label>
                     <label>
+                      国家代码
+                      <input value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value })} />
+                    </label>
+                    <label>
                       省/州（可多个，用逗号分隔）
                       <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
-                    </label>
-                    <label>
-                      关联国家（可多个，用逗号分隔）
-                      <input
-                        value={form.related_countries}
-                        placeholder="日本, 中国"
-                        onChange={(e) => setForm({ ...form, related_countries: e.target.value })}
-                      />
-                    </label>
-                    <label>
-                      关联省份（可多个，用逗号分隔）
-                      <input
-                        value={form.related_provinces}
-                        placeholder="黑龙江, 吉林"
-                        onChange={(e) => setForm({ ...form, related_provinces: e.target.value })}
-                      />
                     </label>
                     <label>
                       市（可多个，用逗号分隔；单城市可自动匹配）
@@ -1586,16 +1777,26 @@ function App() {
                       区县
                       <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
                     </label>
-                    <label>
-                      纬度
-                      <input value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} />
+                    <label className="full">
+                      关联国家（可多个，用逗号分隔）
+                      <input
+                        value={form.related_countries}
+                        placeholder="日本, 中国"
+                        onChange={(e) => setForm({ ...form, related_countries: e.target.value })}
+                      />
                     </label>
-                    <label>
-                      经度
-                      <input value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} />
+                    <label className="full">
+                      关联省份（可多个，用逗号分隔）
+                      <input
+                        value={form.related_provinces}
+                        placeholder="黑龙江, 吉林"
+                        onChange={(e) => setForm({ ...form, related_provinces: e.target.value })}
+                      />
                     </label>
+                  </div>
 
-                    <div className="full city-tools">
+                  <div className="form-block-actions">
+                    <div className="city-tools">
                       <select
                         value=""
                         onChange={(e) => {
@@ -1624,7 +1825,7 @@ function App() {
                     </div>
 
                     {locationHints.length > 0 ? (
-                      <div className="full hints">
+                      <div className="hints">
                         {locationHints.map((item) => (
                           <button key={`${item.country_code}-${item.city}-${item.latitude}`} onClick={() => applyHint(item)}>
                             {item.country_name} / {item.province} / {item.city}
@@ -1632,29 +1833,8 @@ function App() {
                         ))}
                       </div>
                     ) : null}
-
-                    <div className="full geo-map">
-                      {form.latitude && form.longitude ? (
-                        <MapContainer
-                          center={[Number(form.latitude), Number(form.longitude)]}
-                          zoom={8}
-                          scrollWheelZoom
-                          style={{ height: 200, width: '100%' }}
-                        >
-                          <TileLayer
-                            attribution='&copy; OpenStreetMap contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          />
-                          <Marker position={[Number(form.latitude), Number(form.longitude)]}>
-                            <Popup>{form.city || form.country_name || '地图定位'}</Popup>
-                          </Marker>
-                        </MapContainer>
-                      ) : (
-                        <div className="geo-empty">填写经纬度后显示定位</div>
-                      )}
-                    </div>
                   </div>
-                )}
+                </div>
               </section>
 
               <button className="save-btn" onClick={handleSave} disabled={busy}>保存地图信息</button>

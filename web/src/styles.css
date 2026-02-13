@@ -12,6 +12,16 @@
   --resizer: #d7c8b7;
   --resizer-active: #ab6d46;
   --right-pane-width: 540px;
+  --control-bg: #f4f2ee;
+  --control-bg-hover: #ede8e2;
+  --control-bg-active: #e3ddd6;
+  --control-border: #d6cfc5;
+  --control-border-focus: #bdaea0;
+  --control-text: #3d342b;
+  --control-radius: 10px;
+  --control-pad-y: 7px;
+  --control-pad-x: 12px;
+  --control-font: 12px;
 }
 
 * {
@@ -32,6 +42,54 @@ input,
 select,
 textarea {
   font-family: inherit;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--control-text);
+  border-radius: var(--control-radius);
+  padding: var(--control-pad-y) var(--control-pad-x);
+  font-size: var(--control-font);
+  line-height: 1.2;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+button:hover {
+  background: var(--control-bg-hover);
+}
+
+button:active {
+  background: var(--control-bg-active);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--control-border-focus);
+  box-shadow: 0 0 0 2px rgba(140, 120, 98, 0.16);
+  background: #fff;
+}
+
+button:focus-visible {
+  outline: 2px solid rgba(140, 120, 98, 0.25);
+  outline-offset: 2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9a9188;
 }
 
 body.resizing-panes,
@@ -81,15 +139,6 @@ body.resizing-panes * {
 .actions {
   display: flex;
   gap: 8px;
-}
-
-.actions button {
-  border: 1px solid #9c775d;
-  background: #8f5235;
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
 }
 
 .layout {
@@ -218,11 +267,12 @@ body.resizing-panes * {
   top: 44px;
   width: 34px;
   height: 120px;
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--control-text);
   border-radius: 0 10px 10px 0;
   cursor: pointer;
+  padding: 0;
   writing-mode: vertical-rl;
   text-orientation: mixed;
   letter-spacing: 2px;
@@ -253,15 +303,6 @@ body.resizing-panes * {
   height: 34px;
   writing-mode: horizontal-tb;
   border-radius: 0 0 10px 10px;
-}
-
-.globe-hide {
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
 }
 
 .china-dist-wrap {
@@ -307,30 +348,11 @@ body.resizing-panes * {
   gap: 6px;
 }
 
-.globe-zoom button {
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 6px 8px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
 .globe-filter-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 8px;
-}
-
-.globe-filter-actions button {
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 8px 10px;
-  cursor: pointer;
 }
 
 .province-picker {
@@ -345,20 +367,39 @@ body.resizing-panes * {
 
 .province-picker select {
   width: 100%;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: #fff;
 }
 
-.province-clear {
-  border: 1px solid #b58b6b;
-  background: #fff;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 6px 8px;
-  cursor: pointer;
+.region-3d-panel {
+  margin-top: 8px;
+  border: 1px solid #e0d9cf;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.region-3d-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 12px;
+  color: #5f564d;
+  gap: 8px;
+}
+
+.region-3d-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.region-3d-empty {
+  border-radius: 8px;
+  background: #f3f1ed;
+  color: #776f66;
+  font-size: 12px;
+  padding: 14px;
+  text-align: center;
 }
 
 .pane-title {
@@ -452,75 +493,9 @@ body.resizing-panes * {
   overflow: auto;
 }
 
-.browser-list button,
-.browser-row button,
-.library-row button,
-.settings-actions button {
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-
-.library-row input {
-  border: 1px solid #ccbba7;
-  border-radius: 6px;
-  padding: 8px;
-  background: #fff;
-}
-
-.toolbar input,
-.toolbar select,
-.upload-row input,
-.upload-row select,
-.form-grid input,
-.form-grid select,
-.form-grid textarea,
-.settings-block input,
-.settings-block select {
-  border: 1px solid #ccbba7;
-  border-radius: 6px;
-  padding: 8px;
-  background: #fff;
-}
-
-.right-pane .form-grid input,
-.right-pane .form-grid select,
-.right-pane .form-grid textarea {
-  padding: 6px 8px;
-  border-radius: 8px;
-  border-color: #d9d2c7;
-  background: #fcfbf9;
-  font-size: 12px;
-}
-
-.right-pane .form-grid textarea {
-  min-height: 88px;
-}
-
-.toolbar button,
-.upload-row button,
-.pager button,
-.count-controls button,
-.save-btn,
-.hints button,
-.tab-row button,
-.detail-header button,
-.city-tools button,
-.settings-head button,
-.settings-block button {
-  border: 1px solid #b58b6b;
-  background: #fff6ec;
-  color: #4b3024;
-  border-radius: 6px;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
 .tab-row button.active {
-  background: #e7d3bf;
+  background: var(--control-bg-active);
+  border-color: var(--control-border-focus);
 }
 
 .count-line {
@@ -645,33 +620,10 @@ body.resizing-panes * {
   color: #2f2a25;
 }
 
-.right-pane .detail-header button {
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  background: #f4f2ee;
-  border-color: #d6cfc5;
-}
-
 .tab-row {
   margin-top: 0;
   display: flex;
   gap: 6px;
-}
-
-.right-pane .tab-row button {
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
-  background: #f3f1ed;
-  border-color: #d6d0c6;
-  color: #4a4138;
-}
-
-.right-pane .tab-row button.active {
-  background: #e1e9e3;
-  border-color: #bcc9c1;
-  color: #2e4a39;
 }
 
 .preview {
@@ -701,16 +653,6 @@ body.resizing-panes * {
   padding: 6px 8px;
   border-bottom: 1px solid #e1d8cb;
   background: #f7f4ef;
-}
-
-.preview-toolbar button {
-  border: 1px solid #d2c8bc;
-  background: #fdfbf7;
-  color: #3c2f25;
-  border-radius: 999px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-size: 11px;
 }
 
 .preview-transform-wrapper {
@@ -761,6 +703,33 @@ body.resizing-panes * {
   gap: 6px;
 }
 
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-block {
+  border: 1px solid #e6dfd6;
+  border-radius: 12px;
+  background: #faf9f6;
+  padding: 8px;
+}
+
+.form-block-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6a5f55;
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+
+.form-block-actions {
+  margin-top: 6px;
+  display: grid;
+  gap: 6px;
+}
+
 .form-grid.compact {
   margin-top: 6px;
   gap: 6px;
@@ -774,12 +743,6 @@ body.resizing-panes * {
 
 .right-pane .form-grid.compact label {
   font-size: 10px;
-}
-
-.form-grid.compact input,
-.form-grid.compact select,
-.form-grid.compact textarea {
-  padding: 6px;
 }
 
 .form-grid label,
@@ -797,6 +760,7 @@ body.resizing-panes * {
 
 .form-grid textarea {
   resize: vertical;
+  min-height: 88px;
 }
 
 .city-tools {
@@ -804,12 +768,6 @@ body.resizing-panes * {
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
-}
-
-.right-pane .city-tools button {
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
 }
 
 .city-tools select {
@@ -822,42 +780,9 @@ body.resizing-panes * {
   gap: 6px;
 }
 
-.right-pane .hints button {
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  background: #f5f2ee;
-  border-color: #d8d1c6;
-  color: #4b4037;
-}
-
-.geo-map {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.geo-empty {
-  height: 200px;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: #f8f4ed;
-}
-
 .save-btn {
   margin-top: 8px;
   width: 100%;
-  background: #925636;
-  border-color: #6f3f27;
-  color: #fff;
-}
-
-.right-pane .save-btn {
-  margin-top: 0;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 13px;
 }
 
 .settings-mask {
@@ -1052,6 +977,14 @@ body.resizing-panes * {
 
   .preview-transform-wrapper {
     height: min(var(--detail-preview-height, 520px), 52vh);
+  }
+
+  .form-block {
+    padding: 6px;
+  }
+
+  .region-3d-panel {
+    padding: 6px;
   }
 
   .toolbar {
