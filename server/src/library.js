@@ -8,7 +8,7 @@ import mime from 'mime-types';
 import { createClient } from 'webdav';
 import { statements, withTransaction, removeMissingForSource } from './db.js';
 import { findCityCoordinate, matchChinaCityByFilename } from './location-dict.js';
-import { getMapLibraryDir, getStorageDriver, getWebdavSettings } from './runtime-settings.js';
+import { getMapLibraryDir, getServerMapDir, getStorageDriver, getWebdavSettings } from './runtime-settings.js';
 import {
   PROJECT_DIR_NAME,
   PROJECT_FILE_NAME,
@@ -225,6 +225,36 @@ const getWebdavContext = () => {
   };
 };
 
+const autoClassifyUpload = ({ fileName, folder = '' }) => {
+  const cleanFolder = sanitizeRelativeFolder(folder);
+  if (cleanFolder) {
+    return cleanFolder;
+  }
+
+  const inferred = mergeInferred(inferByPath(fileName), matchChinaCityByFilename(fileName));
+  const hasChina = inferred.country_code === 'CN' || inferred.country_name === '中国' || inferred.scope_level === 'national';
+  const safeProvince = String(inferred.province || '').trim();
+  const safeCity = String(inferred.city || '').trim();
+  const safeCountry = String(inferred.country_name || '').trim();
+
+  if (hasChina) {
+    return ['national', '中国', safeProvince, safeCity].filter(Boolean).join('/');
+  }
+
+  if (safeCountry && safeCountry !== '全球') {
+    return ['international', safeCountry, safeProvince, safeCity].filter(Boolean).join('/');
+  }
+
+  return 'incoming/未归类';
+};
+
+const getActiveLocalRootDir = () => {
+  if (getStorageDriver() === 'server') {
+    return getServerMapDir();
+  }
+  return getMapLibraryDir();
+};
+
 const parseTagsValue = (tagsValue) => {
   if (!tagsValue) return [];
   if (Array.isArray(tagsValue)) {
@@ -348,7 +378,7 @@ const ensureUniqueWebdavPath = async (client, targetPath) => {
 };
 
 export const listLocalDirectories = async ({ maxDepth = 6 } = {}) => {
-  const rootDir = getMapLibraryDir();
+  const rootDir = getActiveLocalRootDir();
   if (!rootDir) return [];
   if (!fs.existsSync(rootDir)) return [];
 
@@ -403,9 +433,10 @@ export const listWebdavDirectories = async ({ maxDepth = 6 } = {}) => {
 };
 
 export const scanLocalLibrary = async () => {
-  const rootDir = getMapLibraryDir();
+  const rootDir = getActiveLocalRootDir();
+  const source = getStorageDriver() === 'server' ? 'server' : 'local';
   if (!rootDir) {
-    throw new Error('MAP_LIBRARY_DIR is required for local mode');
+    throw new Error(source === 'server' ? 'SERVER_MAP_DIR is required for server mode' : 'MAP_LIBRARY_DIR is required for local mode');
   }
   if (!fs.existsSync(rootDir)) {
     throw new Error(`Map folder does not exist: ${rootDir}`);
@@ -454,7 +485,7 @@ export const scanLocalLibrary = async () => {
       const persistedMeta = projectSnapshot.maps?.[relativePath] || null;
 
       const row = toRowFromProjectMeta({
-        id: hashId(`local:${absPath}`),
+        id: hashId(`${source}:${absPath}`),
         filePath: absPath,
         fileName,
         title,
@@ -463,7 +494,7 @@ export const scanLocalLibrary = async () => {
         height,
         sizeBytes: stat.size,
         mtimeMs: stat.mtimeMs,
-        source: 'local',
+        source,
         inferred,
         nowIso: nowIsoValue,
         persistedMeta
@@ -479,11 +510,11 @@ export const scanLocalLibrary = async () => {
     }
   });
 
-  removeMissingForSource({ source: 'local', presentPaths });
-  await pruneProjectMeta({ source: 'local', presentRelativePaths });
-  await batchMergeProjectMeta({ source: 'local', entries: projectEntries });
+  removeMissingForSource({ source, presentPaths });
+  await pruneProjectMeta({ source, presentRelativePaths });
+  await batchMergeProjectMeta({ source, entries: projectEntries });
 
-  return { source: 'local', scanned: presentPaths.length };
+  return { source, scanned: presentPaths.length };
 };
 
 export const scanWebdavLibrary = async () => {
@@ -558,8 +589,8 @@ export const getImageStream = (mapRow) => {
 };
 
 export const saveUploadToStorage = async ({ file, folder = '' }) => {
-  const cleanFolder = sanitizeRelativeFolder(folder);
   const normalizedName = normalizeUploadFileName(file.originalname);
+  const cleanFolder = autoClassifyUpload({ fileName: normalizedName, folder });
 
   if (getStorageDriver() === 'webdav') {
     const { client, rootPath } = getWebdavContext();
@@ -576,9 +607,9 @@ export const saveUploadToStorage = async ({ file, folder = '' }) => {
     return targetPath;
   }
 
-  const rootDir = getMapLibraryDir();
+  const rootDir = getActiveLocalRootDir();
   if (!rootDir) {
-    throw new Error('MAP_LIBRARY_DIR is required for local uploads');
+    throw new Error(getStorageDriver() === 'server' ? 'SERVER_MAP_DIR is required for server uploads' : 'MAP_LIBRARY_DIR is required for local uploads');
   }
 
   const targetDir = ensurePathInsideRoot(rootDir, path.resolve(rootDir, cleanFolder));

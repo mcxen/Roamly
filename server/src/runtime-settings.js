@@ -41,27 +41,28 @@ const normalizePath = (inputPath) => {
 
 const persisted = loadSettings();
 
+const ensureStorageDriver = (driver) => {
+  const value = String(driver || '').trim().toLowerCase();
+  if (!['local', 'server', 'webdav'].includes(value)) {
+    throw new Error('storageDriver 仅支持 local、server 或 webdav');
+  }
+  return value;
+};
+
 const runtimeState = {
-  storageDriver: persisted.storageDriver || config.storageDriver || 'local',
-  mapLibraryDir: persisted.mapLibraryDir || config.mapLibraryDir || '',
+  storageDriver: ensureStorageDriver(process.env.STORAGE_DRIVER || persisted.storageDriver || config.storageDriver || 'local'),
+  mapLibraryDir: normalizePath(process.env.MAP_LIBRARY_DIR || persisted.mapLibraryDir || config.mapLibraryDir || ''),
+  serverMapDir: normalizePath(process.env.SERVER_MAP_DIR || persisted.serverMapDir || config.serverMapDir || path.resolve(config.dataDir, 'maps')),
   webdav: {
-    url: persisted.webdav?.url || config.webdav.url || '',
-    username: persisted.webdav?.username || config.webdav.username || '',
-    password: persisted.webdav?.password || config.webdav.password || '',
-    rootPath: normalizeRootPath(persisted.webdav?.rootPath || '/')
+    url: process.env.WEBDAV_URL || persisted.webdav?.url || config.webdav.url || '',
+    username: process.env.WEBDAV_USER || persisted.webdav?.username || config.webdav.username || '',
+    password: process.env.WEBDAV_PASS || persisted.webdav?.password || config.webdav.password || '',
+    rootPath: normalizeRootPath(process.env.WEBDAV_ROOT_PATH ?? persisted.webdav?.rootPath ?? config.webdav.rootPath ?? '/')
   }
 };
 
 const saveSettings = () => {
   fs.writeFileSync(settingsPath, JSON.stringify(runtimeState, null, 2));
-};
-
-const ensureStorageDriver = (driver) => {
-  const value = String(driver || '').trim().toLowerCase();
-  if (!['local', 'webdav'].includes(value)) {
-    throw new Error('storageDriver 仅支持 local 或 webdav');
-  }
-  return value;
 };
 
 export const getStorageDriver = () => runtimeState.storageDriver;
@@ -92,6 +93,20 @@ export const setMapLibraryDir = (inputPath) => {
   }
 
   runtimeState.mapLibraryDir = resolved;
+  saveSettings();
+  return resolved;
+};
+
+export const getServerMapDir = () => runtimeState.serverMapDir || normalizePath(config.serverMapDir || path.resolve(config.dataDir, 'maps'));
+
+export const setServerMapDir = (inputPath) => {
+  const resolved = normalizePath(inputPath || config.serverMapDir || path.resolve(config.dataDir, 'maps'));
+  if (!resolved) {
+    throw new Error('服务端目录不能为空');
+  }
+
+  fs.mkdirSync(resolved, { recursive: true });
+  runtimeState.serverMapDir = resolved;
   saveSettings();
   return resolved;
 };
@@ -142,6 +157,10 @@ export const updateStorageSettings = (payload = {}) => {
     setMapLibraryDir(payload.mapLibraryDir);
   }
 
+  if (payload.serverMapDir !== undefined && String(payload.serverMapDir).trim()) {
+    setServerMapDir(payload.serverMapDir);
+  }
+
   if (payload.webdav && typeof payload.webdav === 'object') {
     setWebdavSettings(payload.webdav);
   }
@@ -156,12 +175,16 @@ export const getProjectKey = () => {
     const url = runtimeState.webdav.url || '';
     return `webdav:${url}|${rootPath}`;
   }
+  if (runtimeState.storageDriver === 'server') {
+    return `server:${runtimeState.serverMapDir || ''}`;
+  }
   return `local:${runtimeState.mapLibraryDir || ''}`;
 };
 
 export const getRuntimeSettings = () => ({
   storageDriver: runtimeState.storageDriver,
   mapLibraryDir: runtimeState.mapLibraryDir || '',
+  serverMapDir: getServerMapDir(),
   webdav: getWebdavSettings(false),
   projectKey: getProjectKey()
 });

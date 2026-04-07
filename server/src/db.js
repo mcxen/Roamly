@@ -37,6 +37,7 @@ db.exec(`
     source TEXT NOT NULL,
     favorite INTEGER DEFAULT 0,
     ocr_text TEXT,
+    ocr_blocks TEXT,
     ocr_status TEXT,
     ocr_error TEXT,
     ocr_updated_at TEXT,
@@ -83,6 +84,7 @@ maybeAddColumn('latitude REAL');
 maybeAddColumn('longitude REAL');
 maybeAddColumn('year_label TEXT');
 maybeAddColumn('ocr_text TEXT');
+maybeAddColumn('ocr_blocks TEXT');
 maybeAddColumn('ocr_status TEXT');
 maybeAddColumn('ocr_error TEXT');
 maybeAddColumn('ocr_updated_at TEXT');
@@ -120,6 +122,7 @@ export const statements = {
       source,
       favorite,
       ocr_text,
+      ocr_blocks,
       ocr_status,
       ocr_error,
       ocr_updated_at,
@@ -153,6 +156,7 @@ export const statements = {
       @source,
       @favorite,
       @ocr_text,
+      @ocr_blocks,
       @ocr_status,
       @ocr_error,
       @ocr_updated_at,
@@ -185,6 +189,10 @@ export const statements = {
       ocr_text = CASE
         WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_text
         ELSE COALESCE(excluded.ocr_text, maps.ocr_text)
+      END,
+      ocr_blocks = CASE
+        WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_blocks
+        ELSE COALESCE(excluded.ocr_blocks, maps.ocr_blocks)
       END,
       ocr_status = CASE
         WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_status
@@ -242,6 +250,7 @@ export const statements = {
   updateOcrResult: db.prepare(`
     UPDATE maps
     SET ocr_text = @ocr_text,
+        ocr_blocks = @ocr_blocks,
         ocr_status = @ocr_status,
         ocr_error = @ocr_error,
         ocr_updated_at = @ocr_updated_at,
@@ -298,6 +307,16 @@ export const parseTags = (tagsJson) => {
   }
 };
 
+export const parseJsonObject = (jsonText, fallbackValue = null) => {
+  if (!jsonText) return fallbackValue;
+  try {
+    const parsed = JSON.parse(jsonText);
+    return parsed && typeof parsed === 'object' ? parsed : fallbackValue;
+  } catch (_err) {
+    return fallbackValue;
+  }
+};
+
 export const rowToMap = (row) => {
   if (!row) return null;
   return {
@@ -305,6 +324,7 @@ export const rowToMap = (row) => {
     tags: parseTags(row.tags),
     related_countries: parseTags(row.related_countries),
     related_provinces: parseTags(row.related_provinces),
+    ocr_blocks: parseJsonObject(row.ocr_blocks, []),
     favorite: Boolean(row.favorite)
   };
 };

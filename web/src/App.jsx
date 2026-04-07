@@ -149,7 +149,6 @@ const DEFAULT_FILTERS = {
   country: '',
   province: '',
   city: '',
-  source: '',
   favorite: ''
 };
 
@@ -171,9 +170,30 @@ const emptyForm = {
   year_label: ''
 };
 
+const emptyUploadMeta = {
+  title: '',
+  description: '',
+  tags: '',
+  collection_unit: '',
+  scope_level: '',
+  country_code: '',
+  country_name: '',
+  province: '',
+  related_countries: '',
+  related_provinces: '',
+  city: '',
+  district: '',
+  latitude: '',
+  longitude: '',
+  year_label: '',
+  favorite: false,
+  auto_resolve_city: true
+};
+
 const DEFAULT_STORAGE_FORM = {
   storageDriver: 'local',
   mapLibraryDir: '',
+  serverMapDir: '',
   webdav: {
     url: '',
     username: '',
@@ -202,6 +222,19 @@ const GLOBE_DOCK_MARGIN = 8;
 const GLOBE_TOGGLE_WIDTH = 34;
 const LAYOUT_BASE_PADDING = 10;
 const GLOBE_TOGGLE_OFFSET = Math.max(0, GLOBE_DOCK_MARGIN + GLOBE_TOGGLE_WIDTH - LAYOUT_BASE_PADDING);
+
+const buildFileUrl = (id, params = {}) => {
+  const safeId = encodeURIComponent(String(id || '').trim());
+  const query = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    query.set(key, String(value));
+  });
+
+  const suffix = query.toString();
+  return `/api/files/${safeId}${suffix ? `?${suffix}` : ''}`;
+};
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const splitMultiValue = (value) => {
@@ -244,7 +277,7 @@ const loadJsonFromStorage = (key, fallbackValue) => {
 };
 
 const normalizeDriver = (value) => {
-  return value === 'webdav' ? 'webdav' : 'local';
+  return value === 'webdav' ? 'webdav' : (value === 'server' ? 'server' : 'local');
 };
 
 const formatBytes = (size) => {
@@ -266,16 +299,10 @@ const pickFolders = (data) => {
   return folders.length ? folders : [''];
 };
 
-const buildFileUrl = (id, params = {}) => {
-  if (!id) return '';
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      query.set(key, String(value));
-    }
-  }
-  const suffix = query.toString();
-  return suffix ? `/api/files/${id}?${suffix}` : `/api/files/${id}`;
+const buildOcrHighlights = (map, keyword) => {
+  const q = String(keyword || '').trim().toLowerCase();
+  if (!q || !Array.isArray(map?.ocr_blocks)) return [];
+  return map.ocr_blocks.filter((item) => String(item?.text || '').toLowerCase().includes(q));
 };
 
 function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
@@ -582,6 +609,9 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]);
   const [uploadFolder, setUploadFolder] = useState('');
+  const [uploadMeta, setUploadMeta] = useState(emptyUploadMeta);
+  const [uploadMetaOpen, setUploadMetaOpen] = useState(false);
+  const [uploadAdvancedOpen, setUploadAdvancedOpen] = useState(false);
   const [folderOptions, setFolderOptions] = useState(['']);
   const [browserState, setBrowserState] = useState({
     currentPath: '',
@@ -625,6 +655,7 @@ function App() {
     if (!selectedMap?.id) return '';
     return buildFileUrl(selectedMap.id, { v: selectedMap?.mtime_ms || '' });
   }, [selectedMap?.id, selectedMap?.mtime_ms]);
+  const ocrHighlights = useMemo(() => buildOcrHighlights(selectedMap, filters.q || queryInput), [selectedMap, filters.q, queryInput]);
 
   const cardGridStyle = useMemo(() => ({
     '--thumb-height': `${clamp(Number(uiSettings.thumbnailHeight) || 160, 10, 320)}px`,
@@ -741,6 +772,7 @@ function App() {
     setStorageForm({
       storageDriver: normalizeDriver(data.storageDriver),
       mapLibraryDir: data.mapLibraryDir || '',
+      serverMapDir: data.serverMapDir || '',
       webdav: {
         url: data.webdav?.url || '',
         username: data.webdav?.username || '',
@@ -787,11 +819,14 @@ function App() {
   }, [status?.storageDriver]);
 
   const loadBrowser = useCallback(async (targetPath, driver = status?.storageDriver) => {
-    if (normalizeDriver(driver) !== 'local') {
+    if (!['local', 'server'].includes(normalizeDriver(driver))) {
       return;
     }
     try {
-      const data = await api.browseLocal(targetPath || storageForm.mapLibraryDir || '');
+      const basePath = normalizeDriver(driver) === 'server'
+        ? (targetPath || storageForm.serverMapDir || '')
+        : (targetPath || storageForm.mapLibraryDir || '');
+      const data = await api.browseLocal(basePath);
       setBrowserState({
         currentPath: data.currentPath || '',
         parentPath: data.parentPath || '',
@@ -800,25 +835,25 @@ function App() {
     } catch (err) {
       setError(err.message);
     }
-  }, [status?.storageDriver, storageForm.mapLibraryDir]);
+  }, [status?.storageDriver, storageForm.mapLibraryDir, storageForm.serverMapDir]);
 
-  const loadFacets = useCallback(async (source, country) => {
+  const loadFacets = useCallback(async (country) => {
     try {
       const data = await api.facets({
-        source: source || undefined,
+        source: status?.storageDriver || undefined,
         country: country || undefined
       });
       setFacets(data);
     } catch (err) {
       setError(err.message);
     }
-  }, []);
+  }, [status?.storageDriver]);
 
   const loadMaps = useCallback(async () => {
     setBusy(true);
     setError('');
     try {
-      const data = await api.listMaps({ ...filters, page, limit: pageSize });
+      const data = await api.listMaps({ ...filters, source: status?.storageDriver || undefined, page, limit: pageSize });
       setMaps(data.items);
       setTotal(data.total);
       setHasMore(Boolean(data.hasMore));
@@ -834,7 +869,7 @@ function App() {
     } finally {
       setBusy(false);
     }
-  }, [filters, page, pageSize, selectedId]);
+  }, [filters, page, pageSize, selectedId, status?.storageDriver]);
 
   const loadChinaCities = useCallback(async () => {
     try {
@@ -908,6 +943,11 @@ function App() {
       if (localPath) {
         payload.mapLibraryDir = localPath;
       }
+    } else if (nextDriver === 'server') {
+      const serverPath = String(storageForm.serverMapDir || '').trim();
+      if (serverPath) {
+        payload.serverMapDir = serverPath;
+      }
     } else {
       const webdavPayload = {
         url: String(storageForm.webdav?.url || '').trim(),
@@ -932,6 +972,7 @@ function App() {
         ...(prev || {}),
         storageDriver: runtime.storageDriver,
         mapLibraryDir: runtime.mapLibraryDir,
+        serverMapDir: runtime.serverMapDir,
         webdav: runtime.webdav,
         project: data.project || prev?.project
       }));
@@ -940,6 +981,7 @@ function App() {
         ...prev,
         storageDriver: normalizeDriver(runtime.storageDriver),
         mapLibraryDir: runtime.mapLibraryDir || '',
+        serverMapDir: runtime.serverMapDir || '',
         webdav: {
           url: runtime.webdav?.url || '',
           username: runtime.webdav?.username || '',
@@ -951,14 +993,14 @@ function App() {
       setFolderOptions(pickFolders(data));
       setUploadFolder('');
 
-      if (runtime.storageDriver === 'local') {
-        await loadBrowser(runtime.mapLibraryDir || '', runtime.storageDriver);
+      if (runtime.storageDriver === 'local' || runtime.storageDriver === 'server') {
+        await loadBrowser(runtime.storageDriver === 'server' ? (runtime.serverMapDir || '') : (runtime.mapLibraryDir || ''), runtime.storageDriver);
       } else {
         setBrowserState({ currentPath: '', parentPath: '', children: [] });
       }
 
       await loadMaps();
-      await loadFacets(filters.source || undefined, filters.country || undefined);
+      await loadFacets(filters.country || undefined);
       await refreshOcrStatus();
 
       const scanned = data.scan?.scanned;
@@ -995,7 +1037,7 @@ function App() {
       });
       setMessage('已保存元数据');
       await loadMaps();
-      await loadFacets(filters.source || undefined, filters.country || undefined);
+      await loadFacets(filters.country || undefined);
       const data = await api.map(selectedId);
       setSelectedMap(data);
     } catch (err) {
@@ -1019,9 +1061,9 @@ function App() {
     setBusy(true);
     try {
       const data = await api.scan();
-      setMessage(`扫描完成: ${data.scanned} 张`);
+      setMessage(`扫描完成: ${data.scanned} 张，已预热 ${data.prewarm?.queued || 0} 张缩略图`);
       await loadMaps();
-      await loadFacets(filters.source || undefined, filters.country || undefined);
+      await loadFacets(filters.country || undefined);
       await loadStorageFolders(status?.storageDriver);
       await refreshOcrStatus();
     } catch (err) {
@@ -1035,11 +1077,12 @@ function App() {
     if (!uploadFiles.length) return;
     setBusy(true);
     try {
-      const result = await api.upload(uploadFiles, uploadFolder);
+      const result = await api.upload(uploadFiles, uploadFolder, uploadMeta);
       setUploadFiles([]);
-      setMessage(`上传并复制完成: ${result.count} 张`);
+      setUploadMeta(emptyUploadMeta);
+      setMessage(`上传并复制完成: ${result.count} 张，已预热 ${result.prewarm?.queued || 0} 张缩略图`);
       await loadMaps();
-      await loadFacets(filters.source || undefined, filters.country || undefined);
+      await loadFacets(filters.country || undefined);
       await loadStorageFolders(status?.storageDriver);
       await refreshOcrStatus();
     } catch (err) {
@@ -1184,8 +1227,8 @@ function App() {
   }, [loadMaps]);
 
   useEffect(() => {
-    loadFacets(filters.source || undefined, filters.country || undefined);
-  }, [filters.source, filters.country, loadFacets]);
+    loadFacets(filters.country || undefined);
+  }, [filters.country, loadFacets]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -1370,19 +1413,17 @@ function App() {
       <header className="topbar">
         <div className="brand">Roamly 地图库</div>
         <div className="status">
-          <span>存储: {status?.storageDriver || '-'}</span>
+          <span>当前系统: {status?.storageDriver || '-'}</span>
           <span>
             根目录: {status?.storageDriver === 'webdav'
               ? (status?.webdav?.rootPath || '/')
-              : (status?.mapLibraryDir || '未设置')}
-          </span>
-          <span>
-            OCR: {ocrStatus?.available ? `可用(队列${ocrStatus.queueSize || 0})` : '不可用'}
+              : (status?.storageDriver === 'server'
+                ? (status?.serverMapDir || '未设置')
+                : (status?.mapLibraryDir || '未设置'))}
           </span>
         </div>
         <div className="actions">
           <button onClick={() => setSettingsOpen(true)}>设置</button>
-          <button onClick={handleScan} disabled={busy}>重扫目录</button>
         </div>
       </header>
 
@@ -1493,7 +1534,7 @@ function App() {
         style={layoutStyle}
       >
         <section className="center-pane pane">
-          <div className="toolbar">
+          <div className="toolbar compact-toolbar">
             <input
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
@@ -1502,38 +1543,86 @@ function App() {
               }}
               placeholder="搜索标题/文件名/城市/OCR文字"
             />
-            <select value={filters.source} onChange={(e) => setFilter('source', e.target.value)}>
-              <option value="">全部来源</option>
-              <option value="local">本地文件夹</option>
-              <option value="webdav">WebDAV</option>
-            </select>
-            <button onClick={applySearch}>检索</button>
-            <button onClick={resetFilters}>清空</button>
-            <button onClick={() => setFilter('favorite', filters.favorite ? '' : 'true')}>
-              {filters.favorite ? '取消收藏筛选' : '仅收藏'}
-            </button>
+            <div className="toolbar-actions">
+              <button onClick={applySearch}>检索</button>
+              <button onClick={resetFilters}>清空</button>
+              <button onClick={() => setFilter('favorite', filters.favorite ? '' : 'true')}>
+                {filters.favorite ? '取消收藏' : '仅收藏'}
+              </button>
+              <button type="button" onClick={() => {
+                setUploadMetaOpen((prev) => {
+                  const next = !prev;
+                  if (!next) setUploadAdvancedOpen(false);
+                  return next;
+                });
+              }}>
+                {uploadMetaOpen ? '收起上传' : '上传'}
+              </button>
+            </div>
           </div>
 
-          <div className="upload-row">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => setUploadFiles(Array.from(e.target.files || []))}
-            />
-            <select value={uploadFolder} onChange={(e) => setUploadFolder(e.target.value)}>
-              {folderOptions.map((item) => (
-                <option key={item || '__root__'} value={item}>
-                  {item || '/ (根目录)'}
-                </option>
-              ))}
-            </select>
-            <button onClick={handleUpload} disabled={!uploadFiles.length || busy}>上传并复制</button>
-          </div>
+          {uploadMetaOpen ? (
+            <>
+              <div className="upload-row compact slim-upload-row">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setUploadFiles(Array.from(e.target.files || []))}
+                />
+                <select value={uploadFolder} onChange={(e) => setUploadFolder(e.target.value)}>
+                  {folderOptions.map((item) => (
+                    <option key={item || '__root__'} value={item}>
+                      {item || '/ (根目录)'}
+                    </option>
+                  ))}
+                </select>
+                <div className="toolbar-actions upload-row-actions">
+                  <button type="button" onClick={() => setUploadAdvancedOpen((prev) => !prev)}>
+                    {uploadAdvancedOpen ? '收起高级' : '高级'}
+                  </button>
+                  <button onClick={handleUpload} disabled={!uploadFiles.length || busy}>上传并复制</button>
+                </div>
+              </div>
 
-          <div className="count-line">
+              {uploadAdvancedOpen ? (
+                <div className="upload-meta-grid slim-upload-meta-grid">
+                  <input value={uploadMeta.title} onChange={(e) => setUploadMeta((prev) => ({ ...prev, title: e.target.value }))} placeholder="批量标题（可选）" />
+                  <input value={uploadMeta.year_label} onChange={(e) => setUploadMeta((prev) => ({ ...prev, year_label: e.target.value }))} placeholder="批量年代" />
+                  <input value={uploadMeta.collection_unit} onChange={(e) => setUploadMeta((prev) => ({ ...prev, collection_unit: e.target.value }))} placeholder="收藏单位" />
+                  <input value={uploadMeta.tags} onChange={(e) => setUploadMeta((prev) => ({ ...prev, tags: e.target.value }))} placeholder="批量标签，逗号分隔" />
+                  <select value={uploadMeta.scope_level} onChange={(e) => setUploadMeta((prev) => ({ ...prev, scope_level: e.target.value }))}>
+                    <option value="">范围（自动/空）</option>
+                    <option value="national">国家级</option>
+                    <option value="international">国际</option>
+                  </select>
+                  <input value={uploadMeta.country_name} onChange={(e) => setUploadMeta((prev) => ({ ...prev, country_name: e.target.value }))} placeholder="国家" />
+                  <input value={uploadMeta.country_code} onChange={(e) => setUploadMeta((prev) => ({ ...prev, country_code: e.target.value }))} placeholder="国家代码" />
+                  <input value={uploadMeta.province} onChange={(e) => setUploadMeta((prev) => ({ ...prev, province: e.target.value }))} placeholder="省/州" />
+                  <input value={uploadMeta.city} onChange={(e) => setUploadMeta((prev) => ({ ...prev, city: e.target.value }))} placeholder="城市" />
+                  <input value={uploadMeta.district} onChange={(e) => setUploadMeta((prev) => ({ ...prev, district: e.target.value }))} placeholder="区县" />
+                  <input value={uploadMeta.related_countries} onChange={(e) => setUploadMeta((prev) => ({ ...prev, related_countries: e.target.value }))} placeholder="相关国家，逗号分隔" />
+                  <input value={uploadMeta.related_provinces} onChange={(e) => setUploadMeta((prev) => ({ ...prev, related_provinces: e.target.value }))} placeholder="相关省份，逗号分隔" />
+                  <input value={uploadMeta.latitude} onChange={(e) => setUploadMeta((prev) => ({ ...prev, latitude: e.target.value }))} placeholder="纬度" />
+                  <input value={uploadMeta.longitude} onChange={(e) => setUploadMeta((prev) => ({ ...prev, longitude: e.target.value }))} placeholder="经度" />
+                  <textarea value={uploadMeta.description} onChange={(e) => setUploadMeta((prev) => ({ ...prev, description: e.target.value }))} rows={2} placeholder="批量描述（可选）" />
+                  <label className="upload-meta-check">
+                    <input type="checkbox" checked={uploadMeta.favorite} onChange={(e) => setUploadMeta((prev) => ({ ...prev, favorite: e.target.checked }))} />
+                    上传后设为收藏
+                  </label>
+                  <label className="upload-meta-check">
+                    <input type="checkbox" checked={uploadMeta.auto_resolve_city} onChange={(e) => setUploadMeta((prev) => ({ ...prev, auto_resolve_city: e.target.checked }))} />
+                    根据城市自动补全定位
+                  </label>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          <div className="count-line compact-count-line">
             <span>共 {total} 张，{totalPages} 页，当前第 {page} 页</span>
             <div className="count-controls">
+              <button onClick={handleScan} disabled={busy}>重扫</button>
               <label>
                 每页
                 <select
@@ -1670,18 +1759,33 @@ function App() {
                           wrapperClass="preview-transform-wrapper"
                           contentClass="preview-transform-content"
                         >
-                          <img
-                            className="preview"
-                            src={detailImageSrc}
-                            alt={selectedMap.title || selectedMap.file_name}
-                            loading="eager"
-                            decoding="async"
-                          />
+                          <div className="preview-image-wrap">
+                            <img
+                              className="preview"
+                              src={detailImageSrc}
+                              alt={selectedMap.title || selectedMap.file_name}
+                              loading="eager"
+                              decoding="async"
+                            />
+                            {ocrHighlights.map((item, index) => (
+                              <div
+                                key={`${item.text}-${index}`}
+                                className="ocr-highlight"
+                                title={`${item.text} (${Math.round(item.confidence || 0)}%)`}
+                                style={{
+                                  left: `${(item.rect?.x || 0) * 100}%`,
+                                  top: `${(item.rect?.y || 0) * 100}%`,
+                                  width: `${(item.rect?.w || 0) * 100}%`,
+                                  height: `${(item.rect?.h || 0) * 100}%`
+                                }}
+                              />
+                            ))}
+                          </div>
                         </TransformComponent>
                       </>
                     )}
                   </TransformWrapper>
-                  <div className="preview-tip">触控板/滚轮可缩放，拖拽可平移</div>
+                  <div className="preview-tip">触控板/滚轮可缩放，拖拽可平移{ocrHighlights.length ? `，当前命中 ${ocrHighlights.length} 处 OCR 文本` : ''}</div>
                 </div>
               </section>
 
@@ -1694,6 +1798,11 @@ function App() {
                   <span>{formatDate(selectedMap.mtime_ms)}</span>
                   <span>OCR: {selectedMap.ocr_status || 'pending'}</span>
                 </div>
+                {selectedMap.ocr_text && ocrHighlights.length ? (
+                  <div className="preview-ocr-summary preview-ocr-summary-compact">
+                    <span className="preview-ocr-chip">OCR 命中 {ocrHighlights.length}</span>
+                  </div>
+                ) : null}
               </section>
 
               <section className="detail-section form-section">
@@ -1908,6 +2017,7 @@ function App() {
                   onChange={(e) => setStorageForm((prev) => ({ ...prev, storageDriver: normalizeDriver(e.target.value) }))}
                 >
                   <option value="local">本地目录</option>
+                  <option value="server">服务端托管</option>
                   <option value="webdav">WebDAV</option>
                 </select>
               </label>
@@ -1921,11 +2031,11 @@ function App() {
                       placeholder="输入本地地图目录"
                     />
                     <button onClick={applyStorageSettings} disabled={busy}>设置目录</button>
-                    <button onClick={() => loadBrowser(browserState.currentPath || storageForm.mapLibraryDir)} disabled={busy}>刷新浏览</button>
+                    <button onClick={() => loadBrowser(browserState.currentPath || storageForm.mapLibraryDir, 'local')} disabled={busy}>刷新浏览</button>
                   </div>
 
                   <div className="browser-row">
-                    <button onClick={() => loadBrowser(browserState.parentPath)} disabled={!browserState.parentPath}>上级</button>
+                    <button onClick={() => loadBrowser(browserState.parentPath, 'local')} disabled={!browserState.parentPath}>上级</button>
                     <span className="browser-path" title={browserState.currentPath}>{browserState.currentPath || '-'}</span>
                   </div>
                   <div className="browser-list">
@@ -1934,7 +2044,7 @@ function App() {
                         key={item.path}
                         onClick={() => {
                           setStorageForm((prev) => ({ ...prev, mapLibraryDir: item.path }));
-                          loadBrowser(item.path);
+                          loadBrowser(item.path, 'local');
                         }}
                         title={item.path}
                       >
@@ -1942,6 +2052,19 @@ function App() {
                       </button>
                     ))}
                   </div>
+                </>
+              ) : storageForm.storageDriver === 'server' ? (
+                <>
+                  <div className="library-row">
+                    <input
+                      value={storageForm.serverMapDir}
+                      onChange={(e) => setStorageForm((prev) => ({ ...prev, serverMapDir: e.target.value }))}
+                      placeholder="输入服务端托管目录"
+                    />
+                    <button onClick={applyStorageSettings} disabled={busy}>设置目录</button>
+                    <button onClick={() => loadBrowser(browserState.currentPath || storageForm.serverMapDir, 'server')} disabled={busy}>刷新浏览</button>
+                  </div>
+                  <div className="settings-tip">适合 Docker / 部署场景。用户上传后文件会直接落到服务端目录，并可自动归类。</div>
                 </>
               ) : (
                 <div className="webdav-grid">

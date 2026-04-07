@@ -1,0 +1,10 @@
+{
+  "storageDriver": "local",
+  "mapLibraryDir": "/Users/mcx/Documents/OpenSpring/Roamly/maps",
+  "webdav": {
+    "url": "",
+    "username": "",
+    "password": "",
+    "rootPath": "/"
+  }
+}

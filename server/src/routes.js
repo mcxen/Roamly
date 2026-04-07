@@ -20,13 +20,14 @@ import {
   getChinaCityOptions
 } from './location-dict.js';
 import { logger } from './logger.js';
-import { resolveOptimizedLocalImagePath } from './image-optimizer.js';
+import { resolveOptimizedLocalImagePath, prewarmOptimizedImages } from './image-optimizer.js';
 import {
   getMapLibraryDir,
   getRuntimeSettings,
   getStorageDriver,
   getWebdavSettings,
   setMapLibraryDir,
+  setServerMapDir,
   setStorageDriver,
   setWebdavSettings,
   updateStorageSettings
@@ -122,6 +123,116 @@ const resolveNullableNumber = (incoming, currentValue) => {
   if (incoming === null || incoming === '') return null;
   const parsed = Number(incoming);
   return Number.isNaN(parsed) ? (currentValue ?? null) : parsed;
+};
+
+const parseBooleanInput = (value, fallback = false) => {
+  if (value === undefined) return fallback;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+};
+
+const buildUploadBatchMeta = (body = {}) => {
+  const cityInput = body.city;
+  const shouldResolveCity = parseBooleanInput(body.auto_resolve_city, true);
+  const resolvedLocation = shouldResolveCity ? resolveLocationByCityInput(cityInput) : null;
+
+  return {
+    title: body.title ?? null,
+    description: body.description ?? null,
+    tags: toTagsJson(body.tags),
+    collection_unit: body.collection_unit ?? null,
+    scope_level: body.scope_level ?? resolvedLocation?.scope_level ?? null,
+    country_code: body.country_code ?? resolvedLocation?.country_code ?? null,
+    country_name: body.country_name ?? resolvedLocation?.country_name ?? null,
+    province: body.province ?? resolvedLocation?.province ?? null,
+    related_countries: toTagsJson(body.related_countries),
+    related_provinces: toTagsJson(body.related_provinces),
+    city: body.city ?? resolvedLocation?.city ?? null,
+    district: body.district ?? resolvedLocation?.district ?? null,
+    latitude: resolveNullableNumber(body.latitude, resolvedLocation?.latitude),
+    longitude: resolveNullableNumber(body.longitude, resolvedLocation?.longitude),
+    year_label: body.year_label ?? null,
+    favorite: parseBooleanInput(body.favorite, undefined)
+  };
+};
+
+const applyBatchMetaToRows = async (filePaths = [], body = {}) => {
+  const paths = Array.isArray(filePaths)
+    ? filePaths.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  if (!paths.length) {
+    return [];
+  }
+
+  const batchMeta = buildUploadBatchMeta(body);
+  const now = new Date().toISOString();
+  const selectByPath = dbInstance.prepare('SELECT * FROM maps WHERE file_path = ?');
+  const touched = [];
+
+  for (const filePath of paths) {
+    const row = selectByPath.get(filePath);
+    if (!row) continue;
+    const current = rowToMap(row);
+    const next = {
+      id: current.id,
+      title: batchMeta.title ?? row.title,
+      description: batchMeta.description ?? row.description,
+      tags: batchMeta.tags ?? row.tags,
+      collection_unit: batchMeta.collection_unit ?? row.collection_unit,
+      scope_level: batchMeta.scope_level ?? row.scope_level,
+      country_code: batchMeta.country_code ?? row.country_code,
+      country_name: batchMeta.country_name ?? row.country_name,
+      province: batchMeta.province ?? row.province,
+      related_countries: batchMeta.related_countries ?? row.related_countries,
+      related_provinces: batchMeta.related_provinces ?? row.related_provinces,
+      city: batchMeta.city ?? row.city,
+      district: batchMeta.district ?? row.district,
+      latitude: batchMeta.latitude ?? row.latitude,
+      longitude: batchMeta.longitude ?? row.longitude,
+      year_label: batchMeta.year_label ?? row.year_label,
+      updated_at: now
+    };
+
+    statements.updateMapMeta.run(next);
+    if (batchMeta.favorite !== undefined) {
+      statements.toggleFavorite.run({
+        id: current.id,
+        favorite: batchMeta.favorite ? 1 : 0,
+        updated_at: now
+      });
+    }
+
+    const updated = rowToMap(statements.findById.get(current.id));
+    await upsertProjectMeta({
+      source: updated.source,
+      filePath: updated.file_path,
+      meta: {
+        title: updated.title,
+        description: updated.description,
+        tags: updated.tags,
+        collection_unit: updated.collection_unit,
+        scope_level: updated.scope_level,
+        country_code: updated.country_code,
+        country_name: updated.country_name,
+        province: updated.province,
+        related_countries: updated.related_countries,
+        related_provinces: updated.related_provinces,
+        city: updated.city,
+        district: updated.district,
+        latitude: updated.latitude,
+        longitude: updated.longitude,
+        year_label: updated.year_label,
+        favorite: updated.favorite
+      }
+    });
+    touched.push(updated);
+  }
+
+  return touched;
 };
 
 const normalizeLocalPathInput = (inputPath) => {
@@ -264,7 +375,7 @@ const buildListQuery = (query) => {
 };
 
 const ensureLocalDriver = (res) => {
-  if (getStorageDriver() !== 'local') {
+  if (!['local', 'server'].includes(getStorageDriver())) {
     res.status(400).json({ ok: false, error: 'only_available_in_local_driver' });
     return false;
   }
@@ -293,6 +404,11 @@ const maybeScanAfterStorageChange = async () => {
   if (storageDriver === 'local' && !getMapLibraryDir()) {
     return null;
   }
+  if (storageDriver === 'server') {
+    const scan = await scanLibrary();
+    queueOcrForCandidates({ force: false, limit: 800 });
+    return scan;
+  }
   if (storageDriver === 'webdav' && !getWebdavSettings(true).url) {
     return null;
   }
@@ -308,6 +424,7 @@ router.get('/status', (_req, res) => {
     ok: true,
     storageDriver: runtime.storageDriver,
     mapLibraryDir: runtime.mapLibraryDir,
+    serverMapDir: runtime.serverMapDir,
     webdav: runtime.webdav,
     watchLibrary: config.watchLibrary,
     ocr: getOcrStatus(),
@@ -326,7 +443,7 @@ router.post('/ocr/reindex', (req, res) => {
   const force = Boolean(req.body?.force);
   const limit = Math.min(Math.max(normalizeNumber(req.body?.limit, 600), 1), 6000);
   const result = queueOcrForCandidates({ force, limit });
-  res.json({ ok: true, ...result });
+  res.json({ ok: true, ...result, status: getOcrStatus() });
 });
 
 router.get('/storage/settings', (_req, res) => {
@@ -349,6 +466,10 @@ router.post('/storage/settings', async (req, res) => {
       setMapLibraryDir(payload.mapLibraryDir);
     }
 
+    if (payload.serverMapDir !== undefined && String(payload.serverMapDir).trim()) {
+      setServerMapDir(payload.serverMapDir);
+    }
+
     if (payload.webdav && typeof payload.webdav === 'object') {
       setWebdavSettings(payload.webdav);
     }
@@ -360,7 +481,7 @@ router.post('/storage/settings', async (req, res) => {
     const scan = await maybeScanAfterStorageChange();
 
     let folders = [];
-    if (getStorageDriver() === 'local') {
+    if (getStorageDriver() === 'local' || getStorageDriver() === 'server') {
       folders = await listLocalDirectories({ maxDepth: 6 });
     } else if (getStorageDriver() === 'webdav') {
       folders = await listWebdavDirectories({ maxDepth: 6 });
@@ -682,6 +803,7 @@ router.put('/maps/:id', async (req, res) => {
       year_label: updated.year_label,
       favorite: updated.favorite,
       ocr_text: updated.ocr_text,
+      ocr_blocks: updated.ocr_blocks,
       ocr_status: updated.ocr_status,
       ocr_error: updated.ocr_error,
       ocr_updated_at: updated.ocr_updated_at,
@@ -726,14 +848,17 @@ router.post('/maps/scan', async (_req, res) => {
     const result = await scanLibrary();
     queueOcrForCandidates({ force: false, limit: 800 });
 
+    const allRows = dbInstance.prepare('SELECT * FROM maps').all().map(rowToMap);
+    const prewarm = await prewarmOptimizedImages(allRows, { limit: 120, max: 720, quality: 72 });
+
     let folders = [];
-    if (getStorageDriver() === 'local') {
+    if (getStorageDriver() === 'local' || getStorageDriver() === 'server') {
       folders = await listLocalDirectories({ maxDepth: 6 });
     } else if (getStorageDriver() === 'webdav') {
       folders = await listWebdavDirectories({ maxDepth: 6 });
     }
 
-    res.json({ ok: true, ...result, folders });
+    res.json({ ok: true, ...result, folders, prewarm });
   } catch (err) {
     logger.error({ err }, 'Scan failed');
     res.status(500).json({ ok: false, error: err.message });
@@ -757,8 +882,18 @@ router.post('/maps/upload', upload.array('files', 300), async (req, res) => {
     }
 
     const scan = await scanLibrary();
+    const touched = await applyBatchMetaToRows(savedPaths, req.body || {});
+    const prewarm = await prewarmOptimizedImages(touched, { limit: 120, max: 720, quality: 72 });
     queueOcrForCandidates({ force: false, limit: 800 });
-    res.json({ ok: true, count: savedPaths.length, paths: savedPaths, scan });
+    res.json({
+      ok: true,
+      count: savedPaths.length,
+      paths: savedPaths,
+      scan,
+      prewarm,
+      updated: touched.length,
+      items: touched
+    });
   } catch (err) {
     logger.error({ err }, 'Upload failed');
     res.status(500).json({ ok: false, error: err.message });

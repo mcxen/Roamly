@@ -86,13 +86,22 @@ export const api = {
   async scan() {
     return handle(await fetch('/api/maps/scan', { method: 'POST' }));
   },
-  async upload(files, folder) {
+  async upload(files, folder, metadata = {}) {
     const normalized = Array.isArray(files) ? files : [files];
     const form = new FormData();
     normalized.filter(Boolean).forEach((file) => {
       form.append('files', file);
     });
     form.append('folder', folder || '');
+
+    Object.entries(metadata || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      if (Array.isArray(value)) {
+        form.append(key, JSON.stringify(value));
+        return;
+      }
+      form.append(key, String(value));
+    });
 
     return handle(await fetch('/api/maps/upload', {
       method: 'POST',

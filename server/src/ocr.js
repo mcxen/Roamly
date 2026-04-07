@@ -64,6 +64,29 @@ const normalizeText = (input) => {
     .trim();
 };
 
+const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+
+const normalizeOcrBlock = ({ text, left, top, width, height, confidence }) => {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText) return null;
+  return {
+    text: normalizedText,
+    confidence: Number.isFinite(Number(confidence)) ? Number(confidence) : 0,
+    rect: {
+      x: clamp01(left),
+      y: clamp01(top),
+      w: clamp01(width),
+      h: clamp01(height)
+    },
+    grid: {
+      x: Math.max(0, Math.min(63, Math.floor(clamp01(left) * 64))),
+      y: Math.max(0, Math.min(63, Math.floor(clamp01(top) * 64))),
+      w: Math.max(1, Math.min(64, Math.ceil(clamp01(width) * 64))),
+      h: Math.max(1, Math.min(64, Math.ceil(clamp01(height) * 64)))
+    }
+  };
+};
+
 const nowIso = () => new Date().toISOString();
 
 const detectCountryMentions = (text) => {
@@ -174,15 +197,69 @@ const recognizeImageText = async ({ source, imagePath }) => {
     throw new Error(`image_missing:${actualPath}`);
   }
 
+  const tempBasePath = path.resolve(
+    os.tmpdir(),
+    `roamly-ocr-${crypto.randomBytes(8).toString('hex')}`
+  );
+
   try {
-    const args = [actualPath, 'stdout', '-l', runtime.lang, '--psm', '6'];
-    const { stdout } = await execFileAsync('tesseract', args, {
+    const args = [
+      actualPath,
+      tempBasePath,
+      '-l',
+      runtime.lang,
+      '--psm',
+      '6',
+      'tsv'
+    ];
+    await execFileAsync('tesseract', args, {
       maxBuffer: 12 * 1024 * 1024,
       timeout: 120000
     });
 
-    return normalizeText(stdout);
+    const tsvPath = `${tempBasePath}.tsv`;
+    const raw = await fsp.readFile(tsvPath, 'utf-8');
+    const lines = raw.split(/\r?\n/).filter(Boolean);
+    const rows = lines.slice(1).map((line) => line.split('\t'));
+
+    const entries = rows
+      .filter((parts) => parts.length >= 12)
+      .map((parts) => ({
+        level: Number(parts[0] || 0),
+        left: Number(parts[6] || 0),
+        top: Number(parts[7] || 0),
+        width: Number(parts[8] || 0),
+        height: Number(parts[9] || 0),
+        conf: Number(parts[10] || 0),
+        text: parts.slice(11).join('\t')
+      }))
+      .filter((item) => item.level === 5 && normalizeText(item.text));
+
+    let imageWidth = 0;
+    let imageHeight = 0;
+    for (const item of entries) {
+      imageWidth = Math.max(imageWidth, item.left + item.width);
+      imageHeight = Math.max(imageHeight, item.top + item.height);
+    }
+    imageWidth = Math.max(1, imageWidth);
+    imageHeight = Math.max(1, imageHeight);
+
+    const blocks = entries
+      .map((item) => normalizeOcrBlock({
+        text: item.text,
+        left: item.left / imageWidth,
+        top: item.top / imageHeight,
+        width: item.width / imageWidth,
+        height: item.height / imageHeight,
+        confidence: item.conf
+      }))
+      .filter(Boolean)
+      .filter((item) => item.confidence >= 20);
+
+    const text = normalizeText(blocks.map((item) => item.text).join(' '));
+    return { text, blocks };
   } finally {
+    await fsp.unlink(`${tempBasePath}.tsv`).catch(() => {});
     if (cleanupPath) {
       await fsp.unlink(cleanupPath).catch(() => {});
     }
@@ -399,13 +476,14 @@ const processQueue = async () => {
     });
 
     try {
-      const text = await recognizeImageText({ source: rowRaw.source, imagePath: rowRaw.file_path });
+      const { text, blocks } = await recognizeImageText({ source: rowRaw.source, imagePath: rowRaw.file_path });
       const updateTime = nowIso();
       const status = text ? 'done' : 'empty';
 
       statements.updateOcrResult.run({
         id,
         ocr_text: text || null,
+        ocr_blocks: JSON.stringify(blocks || []),
         ocr_status: status,
         ocr_error: null,
         ocr_updated_at: updateTime,
@@ -466,6 +544,7 @@ const processQueue = async () => {
           year_label: persistedRow.year_label,
           favorite: persistedRow.favorite,
           ocr_text: persistedRow.ocr_text,
+          ocr_blocks: persistedRow.ocr_blocks,
           ocr_status: persistedRow.ocr_status,
           ocr_error: persistedRow.ocr_error,
           ocr_updated_at: persistedRow.ocr_updated_at,
@@ -477,6 +556,7 @@ const processQueue = async () => {
       statements.updateOcrResult.run({
         id,
         ocr_text: null,
+        ocr_blocks: JSON.stringify([]),
         ocr_status: 'error',
         ocr_error: String(err.message || err).slice(0, 800),
         ocr_updated_at: updateTime,
@@ -491,6 +571,7 @@ const processQueue = async () => {
         filePath: persistedRow.file_path,
         meta: {
           ocr_text: persistedRow.ocr_text,
+          ocr_blocks: persistedRow.ocr_blocks,
           ocr_status: persistedRow.ocr_status,
           ocr_error: persistedRow.ocr_error,
           ocr_updated_at: persistedRow.ocr_updated_at,

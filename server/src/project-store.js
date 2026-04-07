@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { createClient } from 'webdav';
 import { config } from './config.js';
 import { logger } from './logger.js';
-import { getStorageDriver, getMapLibraryDir, getWebdavSettings, getProjectKey } from './runtime-settings.js';
+import { getStorageDriver, getMapLibraryDir, getServerMapDir, getWebdavSettings, getProjectKey } from './runtime-settings.js';
 
 export const PROJECT_DIR_NAME = '.roamly';
 export const PROJECT_FILE_NAME = 'project-data.json';
@@ -71,11 +71,11 @@ const buildDescriptor = () => {
   }
 
   return {
-    source: 'local',
+    source: getStorageDriver() === 'server' ? 'server' : 'local',
     projectKey: getProjectKey(),
-    root: getMapLibraryDir() || '',
+    root: getStorageDriver() === 'server' ? (getServerMapDir() || '') : (getMapLibraryDir() || ''),
     webdav: null,
-    localRoot: getMapLibraryDir() || ''
+    localRoot: getStorageDriver() === 'server' ? (getServerMapDir() || '') : (getMapLibraryDir() || '')
   };
 };
 
@@ -86,7 +86,7 @@ const getCacheFilePath = (descriptor) => {
 };
 
 const getLocalSidecarPath = (descriptor) => {
-  if (descriptor.source !== 'local' || !descriptor.localRoot) return '';
+  if (descriptor.source !== 'local' && descriptor.source !== 'server' || !descriptor.localRoot) return '';
   return path.resolve(descriptor.localRoot, PROJECT_DIR_NAME, PROJECT_FILE_NAME);
 };
 
@@ -151,7 +151,7 @@ const writeWebdavJson = async (descriptor, data) => {
 };
 
 const readPrimary = async (descriptor) => {
-  if (descriptor.source === 'local') {
+  if (descriptor.source === 'local' || descriptor.source === 'server') {
     return readLocalJson(getLocalSidecarPath(descriptor));
   }
 
@@ -163,7 +163,7 @@ const readPrimary = async (descriptor) => {
 };
 
 const writePrimary = async (descriptor, data) => {
-  if (descriptor.source === 'local') {
+  if (descriptor.source === 'local' || descriptor.source === 'server') {
     const sidecarPath = getLocalSidecarPath(descriptor);
     if (!sidecarPath) return;
     await writeLocalJson(sidecarPath, data);
@@ -193,8 +193,8 @@ const normalizeRelativePath = (value) => {
 const toRelativePath = (descriptor, source, filePath) => {
   if (!filePath) return '';
 
-  if (source === 'local') {
-    if (descriptor.source === 'local' && descriptor.localRoot) {
+  if (source === 'local' || source === 'server') {
+    if ((descriptor.source === 'local' || descriptor.source === 'server') && descriptor.localRoot) {
       return normalizeRelativePath(path.relative(descriptor.localRoot, filePath));
     }
     return normalizeRelativePath(filePath);

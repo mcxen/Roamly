@@ -12,6 +12,7 @@ const rootDir = path.resolve(__dirname, '..', '..');
 const dataDir = process.env.DATA_DIR || path.resolve(rootDir, 'server', 'data');
 const storageDriver = process.env.STORAGE_DRIVER || 'local';
 const mapLibraryDir = process.env.MAP_LIBRARY_DIR;
+const serverMapDir = process.env.SERVER_MAP_DIR || path.resolve(dataDir, 'maps');
 
 export const config = {
   rootDir,
@@ -20,6 +21,7 @@ export const config = {
   port: Number(process.env.PORT || 4173),
   storageDriver,
   mapLibraryDir,
+  serverMapDir,
   watchLibrary: (process.env.WATCH_LIBRARY || 'false').toLowerCase() === 'true',
   webdav: {
     url: process.env.WEBDAV_URL,

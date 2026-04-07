@@ -34,7 +34,7 @@ const safeNumber = (value, fallback) => {
 };
 
 const isSupportedLocalImage = (row) => {
-  if (!row || row.source !== 'local') return false;
+  if (!row || !['local', 'server'].includes(row.source)) return false;
   const mime = String(row.mime || '').toLowerCase();
   if (!mime.startsWith('image/')) return false;
   if (mime === 'image/gif' || mime === 'image/svg+xml') return false;
@@ -62,6 +62,11 @@ const renderVariant = async (row, opts) => {
 
   if (fs.existsSync(outPath)) {
     return outPath;
+  }
+
+  const existing = pending.get(key);
+  if (existing) {
+    return existing;
   }
 
   const renderPromise = (async () => {
@@ -102,22 +107,24 @@ export const resolveOptimizedLocalImagePath = async (row, options = {}) => {
   if (!isSupportedLocalImage(row)) {
     return null;
   }
+  return renderVariant(row, options);
+};
 
-  const key = buildVariantKey(row, options);
-  if (pending.has(key)) {
-    return pending.get(key);
+export const prewarmOptimizedImages = async (rows = [], options = {}) => {
+  const list = Array.isArray(rows) ? rows.filter(Boolean).filter(isSupportedLocalImage) : [];
+  if (!list.length) {
+    return { queued: 0 };
   }
 
-  const cachedPath = buildVariantPath(key);
-  if (fs.existsSync(cachedPath)) {
-    return cachedPath;
+  const maxItems = Math.min(Math.max(Number(options.limit || 36), 1), 240);
+  const max = clamp(safeNumber(options.max, 640), 120, 4000);
+  const quality = clamp(safeNumber(options.quality, 70), 45, 95);
+  const targets = list.slice(0, maxItems);
+
+  for (const row of targets) {
+    renderVariant(row, { max, quality }).catch(() => {});
   }
 
-  try {
-    return await renderVariant(row, options);
-  } catch (err) {
-    logger.warn({ err, id: row.id, filePath: row.file_path }, 'render optimized image failed');
-    return null;
-  }
+  return { queued: targets.length };
 };
 

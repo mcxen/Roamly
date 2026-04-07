@@ -10,8 +10,9 @@ services:
     environment:
       PORT: 4173
       NODE_ENV: production
-      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-server}
       MAP_LIBRARY_DIR: ${MAP_LIBRARY_DIR:-/maps}
+      SERVER_MAP_DIR: ${SERVER_MAP_DIR:-/app/server/data/maps}
       DB_PATH: /app/server/data/roamly.db
       WATCH_LIBRARY: "false"
       WEBDAV_URL: ${WEBDAV_URL:-}
@@ -21,3 +22,4 @@ services:
     volumes:
       - ./server/data:/app/server/data
       - ${LOCAL_MAP_DIR:-./maps}:/maps
+      - ${SERVER_MAP_VOLUME:-./server/data/maps}:/app/server/data/maps
