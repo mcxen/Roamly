@@ -156,6 +156,11 @@ const buildUploadBatchMeta = (body = {}) => {
     latitude: resolveNullableNumber(body.latitude, resolvedLocation?.latitude),
     longitude: resolveNullableNumber(body.longitude, resolvedLocation?.longitude),
     year_label: body.year_label ?? null,
+    campaign: body.campaign ?? null,
+    teaching_use: body.teaching_use ?? null,
+    teaching_note: body.teaching_note ?? null,
+    security_level: body.security_level ?? null,
+    storage_band: body.storage_band ?? null,
     favorite: parseBooleanInput(body.favorite, undefined)
   };
 };
@@ -194,6 +199,11 @@ const applyBatchMetaToRows = async (filePaths = [], body = {}) => {
       latitude: batchMeta.latitude ?? row.latitude,
       longitude: batchMeta.longitude ?? row.longitude,
       year_label: batchMeta.year_label ?? row.year_label,
+      campaign: batchMeta.campaign ?? row.campaign,
+      teaching_use: batchMeta.teaching_use ?? row.teaching_use,
+      teaching_note: batchMeta.teaching_note ?? row.teaching_note,
+      security_level: batchMeta.security_level ?? row.security_level,
+      storage_band: batchMeta.storage_band ?? row.storage_band,
       updated_at: now
     };
 
@@ -226,6 +236,11 @@ const applyBatchMetaToRows = async (filePaths = [], body = {}) => {
         latitude: updated.latitude,
         longitude: updated.longitude,
         year_label: updated.year_label,
+        campaign: updated.campaign,
+        teaching_use: updated.teaching_use,
+        teaching_note: updated.teaching_note,
+        security_level: updated.security_level,
+        storage_band: updated.storage_band,
         favorite: updated.favorite
       }
     });
@@ -251,7 +266,7 @@ const buildListQuery = (query) => {
   const filterParams = {};
 
   if (query.q) {
-    where.push('(title LIKE @q OR file_name LIKE @q OR city LIKE @q OR country_name LIKE @q OR related_countries LIKE @q OR related_provinces LIKE @q OR ocr_text LIKE @q)');
+    where.push('(title LIKE @q OR file_name LIKE @q OR city LIKE @q OR country_name LIKE @q OR related_countries LIKE @q OR related_provinces LIKE @q OR ocr_text LIKE @q OR campaign LIKE @q OR teaching_use LIKE @q OR teaching_note LIKE @q OR security_level LIKE @q OR storage_band LIKE @q)');
     filterParams.q = `%${query.q}%`;
   }
 
@@ -372,6 +387,66 @@ const buildListQuery = (query) => {
   };
 
   return { whereClause, filterParams, listParams, page, limit };
+};
+
+const buildMobileFileUrls = (id) => ({
+  original: `/api/files/${encodeURIComponent(id)}`,
+  thumbnail: `/api/files/${encodeURIComponent(id)}?max=720&quality=72`
+});
+
+const buildMobileMapSummary = (row) => {
+  const item = rowToMap(row);
+  if (!item) return null;
+
+  return {
+    id: item.id,
+    file_name: item.file_name,
+    title: item.title || item.file_name,
+    description: item.description || '',
+    tags: item.tags,
+    collection_unit: item.collection_unit,
+    scope_level: item.scope_level,
+    country_code: item.country_code,
+    country_name: item.country_name,
+    province: item.province,
+    related_countries: item.related_countries,
+    related_provinces: item.related_provinces,
+    city: item.city,
+    district: item.district,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    year_label: item.year_label,
+    campaign: item.campaign || '',
+    teaching_use: item.teaching_use || '',
+    teaching_note: item.teaching_note || '',
+    security_level: item.security_level || '',
+    storage_band: item.storage_band || '',
+    favorite: item.favorite,
+    mime: item.mime,
+    width: item.width,
+    height: item.height,
+    size_bytes: item.size_bytes,
+    mtime_ms: item.mtime_ms,
+    updated_at: item.updated_at,
+    created_at: item.created_at,
+    source: item.source,
+    ocr_status: item.ocr_status,
+    ocr_excerpt: item.ocr_text ? String(item.ocr_text).slice(0, 280) : '',
+    files: buildMobileFileUrls(item.id)
+  };
+};
+
+const buildMobileMapDetail = (row) => {
+  const item = rowToMap(row);
+  if (!item) return null;
+
+  return {
+    ...buildMobileMapSummary(row),
+    ocr_text: item.ocr_text || '',
+    ocr_blocks: item.ocr_blocks || [],
+    ocr_error: item.ocr_error || '',
+    ocr_updated_at: item.ocr_updated_at || ''
+  };
 };
 
 const ensureLocalDriver = (res) => {
@@ -731,6 +806,76 @@ router.get('/maps/china-distribution', (req, res) => {
   res.json({ ok: true, items: rows });
 });
 
+router.get('/mobile/manifest', (req, res) => {
+  const includeOcr = String(req.query.include_ocr || '').trim() === 'true';
+  const rows = dbInstance.prepare(`
+    SELECT * FROM maps
+    ORDER BY favorite DESC, updated_at DESC, file_name ASC
+  `).all();
+
+  const revision = dbInstance.prepare(`
+    SELECT MAX(updated_at) AS revision, COUNT(*) AS total FROM maps
+  `).get();
+
+  const items = rows.map((row) => {
+    const summary = buildMobileMapSummary(row);
+    if (!includeOcr) return summary;
+    return {
+      ...summary,
+      ocr_text: row.ocr_text || ''
+    };
+  });
+
+  res.json({
+    ok: true,
+    revision: revision?.revision || '',
+    total: revision?.total || 0,
+    items
+  });
+});
+
+router.get('/mobile/search', (req, res) => {
+  const page = 1;
+  const limit = Math.min(Math.max(normalizeNumber(req.query.limit, 60), 1), 120);
+  const query = {
+    ...req.query,
+    page,
+    limit
+  };
+  const { whereClause, filterParams, listParams } = buildListQuery(query);
+
+  const rows = dbInstance.prepare(`
+    SELECT * FROM maps
+    ${whereClause}
+    ORDER BY favorite DESC, mtime_ms DESC, file_name ASC
+    LIMIT @limit OFFSET @offset
+  `).all(listParams);
+
+  const totalRow = dbInstance.prepare(`
+    SELECT COUNT(*) AS total FROM maps ${whereClause}
+  `).get(filterParams);
+
+  res.json({
+    ok: true,
+    q: String(req.query.q || ''),
+    total: totalRow?.total || 0,
+    items: rows.map(buildMobileMapSummary)
+  });
+});
+
+router.get('/mobile/maps/:id', (req, res) => {
+  const row = statements.findById.get(req.params.id);
+  if (!row) {
+    res.status(404).json({ ok: false, error: 'not_found' });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    item: buildMobileMapDetail(row)
+  });
+});
+
 router.get('/maps/:id', (req, res) => {
   const row = statements.findById.get(req.params.id);
   if (!row) {
@@ -776,6 +921,11 @@ router.put('/maps/:id', async (req, res) => {
       ? resolveNullableNumber(body.longitude, row.longitude)
       : resolveNullableNumber(resolvedLocation?.longitude, row.longitude),
     year_label: body.year_label ?? row.year_label,
+    campaign: body.campaign ?? row.campaign,
+    teaching_use: body.teaching_use ?? row.teaching_use,
+    teaching_note: body.teaching_note ?? row.teaching_note,
+    security_level: body.security_level ?? row.security_level,
+    storage_band: body.storage_band ?? row.storage_band,
     updated_at: new Date().toISOString()
   };
 
@@ -801,6 +951,11 @@ router.put('/maps/:id', async (req, res) => {
       latitude: updated.latitude,
       longitude: updated.longitude,
       year_label: updated.year_label,
+      campaign: updated.campaign,
+      teaching_use: updated.teaching_use,
+      teaching_note: updated.teaching_note,
+      security_level: updated.security_level,
+      storage_band: updated.storage_band,
       favorite: updated.favorite,
       ocr_text: updated.ocr_text,
       ocr_blocks: updated.ocr_blocks,
@@ -812,6 +967,29 @@ router.put('/maps/:id', async (req, res) => {
   });
 
   res.json(updated);
+});
+
+router.post('/maps/batch-update', async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+
+    if (!ids.length) {
+      res.status(400).json({ ok: false, error: 'missing_ids' });
+      return;
+    }
+
+    const rows = ids
+      .map((id) => statements.findById.get(id))
+      .filter(Boolean);
+
+    const touched = await applyBatchMetaToRows(rows.map((row) => row.file_path), req.body || {});
+    res.json({ ok: true, total: touched.length, items: touched });
+  } catch (err) {
+    logger.error({ err }, 'Batch update maps failed');
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 router.post('/maps/:id/favorite', async (req, res) => {

@@ -5,7 +5,7 @@
     "source": "local",
     "root": "/Users/mcx/Documents/OpenSpring/Roamly/maps",
     "created_at": "2026-02-08T02:23:45.898Z",
-    "updated_at": "2026-04-07T04:55:10.710Z"
+    "updated_at": "2026-04-08T06:10:59.059Z"
   },
   "maps": {
     "1925中华民国地图集01.jpg": {
@@ -32,7 +32,7 @@
       "ocr_updated_at": "2026-02-08T03:10:40.511Z",
       "ocr_mtime_ms": 1770516481327.1802,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -57,7 +57,7 @@
       "ocr_updated_at": "2026-02-08T03:10:35.856Z",
       "ocr_mtime_ms": 1770516522874.7268,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -82,7 +82,7 @@
       "ocr_updated_at": null,
       "ocr_mtime_ms": null,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -107,7 +107,7 @@
       "ocr_updated_at": null,
       "ocr_mtime_ms": null,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -132,7 +132,7 @@
       "ocr_updated_at": null,
       "ocr_mtime_ms": null,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -157,7 +157,7 @@
       "ocr_updated_at": null,
       "ocr_mtime_ms": null,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -182,7 +182,7 @@
       "ocr_updated_at": null,
       "ocr_mtime_ms": null,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -207,7 +207,7 @@
       "ocr_updated_at": "2026-02-08T02:00:23.683Z",
       "ocr_mtime_ms": 1770516002196.4001,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -234,7 +234,7 @@
       "ocr_updated_at": "2026-02-08T03:10:31.152Z",
       "ocr_mtime_ms": 1770518037912.0952,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -259,7 +259,7 @@
       "ocr_updated_at": "2026-02-08T03:10:27.416Z",
       "ocr_mtime_ms": 1770518111816.5,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -291,7 +291,7 @@
       "ocr_updated_at": "2026-02-08T03:08:27.306Z",
       "ocr_mtime_ms": 1770518367380.288,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": [
         "黑龙江",
@@ -319,7 +319,7 @@
       "ocr_updated_at": "2026-02-08T03:06:36.108Z",
       "ocr_mtime_ms": 1770518999741.723,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -344,7 +344,7 @@
       "ocr_updated_at": "2026-02-08T03:18:12.051Z",
       "ocr_mtime_ms": 1770520442780.558,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [],
       "related_provinces": []
     },
@@ -380,7 +380,7 @@
       "ocr_updated_at": "2026-03-27T11:02:28.752Z",
       "ocr_mtime_ms": 1770730878859.304,
       "source": "local",
-      "updated_at": "2026-04-07T04:55:10.710Z",
+      "updated_at": "2026-04-08T06:10:59.058Z",
       "related_countries": [
         "美国",
         "俄罗斯",

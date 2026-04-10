@@ -2,17 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
 import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
-import { geoContains, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import chinaGeoJson from 'china-map-geojson/src/china.js';
 import usAtlasData from 'us-atlas/states-10m.json';
-import worldAtlasData from 'world-atlas/countries-110m.json';
 import { api } from './api.js';
-
-const WORLD_FEATURES = feature(
-  worldAtlasData,
-  worldAtlasData?.objects?.countries
-)?.features || [];
+import GlobeCountryPicker from './GlobeCountryPicker.jsx';
 
 const US_STATES_GEOJSON = usAtlasData?.objects?.states
   ? feature(usAtlasData, usAtlasData.objects.states)
@@ -64,6 +58,17 @@ const COUNTRY_NAME_ZH = {
   Chile: '智利',
   Peru: '秘鲁'
 };
+
+const STORAGE_BAND_OPTIONS = [
+  { value: '', label: '未设置' },
+  { value: 'red', label: '红条' },
+  { value: 'orange', label: '橙条' },
+  { value: 'yellow', label: '黄条' },
+  { value: 'green', label: '绿条' },
+  { value: 'cyan', label: '青条' },
+  { value: 'blue', label: '蓝条' },
+  { value: 'purple', label: '紫条' }
+];
 
 const CHINA_PROVINCE_ALIASES = new Map([
   ['内蒙古自治区', '内蒙古'],
@@ -158,6 +163,11 @@ const emptyForm = {
   tags: '',
   collection_unit: '',
   scope_level: '',
+  campaign: '',
+  teaching_use: '',
+  teaching_note: '',
+  security_level: '',
+  storage_band: '',
   country_code: '',
   country_name: '',
   province: '',
@@ -176,6 +186,11 @@ const emptyUploadMeta = {
   tags: '',
   collection_unit: '',
   scope_level: '',
+  campaign: '',
+  teaching_use: '',
+  teaching_note: '',
+  security_level: '',
+  storage_band: '',
   country_code: '',
   country_name: '',
   province: '',
@@ -304,197 +319,6 @@ const buildOcrHighlights = (map, keyword) => {
   if (!q || !Array.isArray(map?.ocr_blocks)) return [];
   return map.ocr_blocks.filter((item) => String(item?.text || '').toLowerCase().includes(q));
 };
-
-function GlobeCountryPicker({ selectedCountry, onPickCountry }) {
-  const canvasRef = useRef(null);
-  const dragStateRef = useRef(null);
-  const rotationRef = useRef([-20, -20, 0]);
-  const [rotation, setRotation] = useState(rotationRef.current);
-  const zoomRef = useRef(1);
-  const [zoom, setZoom] = useState(zoomRef.current);
-
-  const updateZoom = useCallback((value) => {
-    const next = clamp(value, 0.7, 2.1);
-    zoomRef.current = next;
-    setZoom(next);
-  }, []);
-
-  const bumpZoom = useCallback((delta) => {
-    updateZoom(zoomRef.current + delta);
-  }, [updateZoom]);
-
-  const drawGlobe = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const width = canvas.clientWidth || 320;
-    const height = canvas.clientHeight || 240;
-    const dpr = window.devicePixelRatio || 1;
-
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const scale = Math.min(width, height) * 0.46 * zoom;
-    const projection = geoOrthographic()
-      .translate([width / 2, height / 2])
-      .scale(scale)
-      .clipAngle(90)
-      .rotate(rotation);
-
-    const pathGen = geoPath(projection, ctx);
-
-    const gradient = ctx.createRadialGradient(
-      width * 0.42,
-      height * 0.34,
-      scale * 0.08,
-      width * 0.5,
-      height * 0.48,
-      scale * 1.15
-    );
-    gradient.addColorStop(0, '#a0cff5');
-    gradient.addColorStop(0.55, '#68a8dc');
-    gradient.addColorStop(1, '#254b73');
-
-    ctx.beginPath();
-    pathGen({ type: 'Sphere' });
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    ctx.beginPath();
-    pathGen(geoGraticule10());
-    ctx.strokeStyle = 'rgba(220,236,250,0.25)';
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-
-    for (const item of WORLD_FEATURES) {
-      const englishName = item?.properties?.name || '';
-      const name = toCountryLabel(englishName);
-      const selected = Boolean(selectedCountry) && (
-        String(selectedCountry).toLowerCase() === name.toLowerCase()
-        || String(selectedCountry).toLowerCase() === englishName.toLowerCase()
-      );
-
-      ctx.beginPath();
-      pathGen(item);
-      ctx.fillStyle = selected ? '#ffce8a' : '#dce8f4';
-      ctx.strokeStyle = selected ? '#bf6d1f' : 'rgba(89,117,148,0.64)';
-      ctx.lineWidth = selected ? 1.1 : 0.7;
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    ctx.beginPath();
-    pathGen({ type: 'Sphere' });
-    ctx.strokeStyle = 'rgba(16,30,44,0.7)';
-    ctx.lineWidth = 1.3;
-    ctx.stroke();
-  }, [rotation, selectedCountry, zoom]);
-
-  useEffect(() => {
-    drawGlobe();
-    const onResize = () => drawGlobe();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [drawGlobe]);
-
-  const handlePointerDown = (event) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.setPointerCapture(event.pointerId);
-    dragStateRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      startRotation: [...rotationRef.current],
-      moved: false
-    };
-  };
-
-  const handlePointerMove = (event) => {
-    const state = dragStateRef.current;
-    if (!state) return;
-
-    const dx = event.clientX - state.startX;
-    const dy = event.clientY - state.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      state.moved = true;
-    }
-
-    const nextRotation = [
-      state.startRotation[0] + dx * 0.35,
-      clamp(state.startRotation[1] - dy * 0.35, -80, 80),
-      0
-    ];
-    rotationRef.current = nextRotation;
-    setRotation(nextRotation);
-  };
-
-  const handlePointerUp = (event) => {
-    const canvas = canvasRef.current;
-    const state = dragStateRef.current;
-    if (!canvas || !state) {
-      dragStateRef.current = null;
-      return;
-    }
-
-    canvas.releasePointerCapture(event.pointerId);
-    const wasMoved = state.moved;
-    dragStateRef.current = null;
-
-    if (wasMoved) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const width = canvas.clientWidth || rect.width;
-    const height = canvas.clientHeight || rect.height;
-    const projection = geoOrthographic()
-      .translate([width / 2, height / 2])
-      .scale(Math.min(width, height) * 0.46 * zoomRef.current)
-      .clipAngle(90)
-      .rotate(rotationRef.current);
-
-    const point = projection.invert([event.clientX - rect.left, event.clientY - rect.top]);
-    if (!point) return;
-
-    const hit = WORLD_FEATURES.find((item) => geoContains(item, point));
-    if (!hit) return;
-
-    const englishName = hit?.properties?.name || '';
-    const countryName = toCountryLabel(englishName);
-    onPickCountry({
-      country: countryName,
-      country_en: englishName
-    });
-  };
-
-  const handleWheel = (event) => {
-    event.preventDefault();
-    const delta = event.deltaY < 0 ? 0.12 : -0.12;
-    updateZoom(zoomRef.current + delta);
-  };
-
-  return (
-    <div className="globe-wrap">
-      <canvas
-        ref={canvasRef}
-        className="globe-canvas"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
-      />
-      <div className="globe-zoom">
-        <button onClick={() => bumpZoom(0.15)}>放大</button>
-        <button onClick={() => bumpZoom(-0.15)}>缩小</button>
-        <button onClick={() => updateZoom(1)}>重置</button>
-      </div>
-      <div className="globe-tip">拖拽旋转，滚轮缩放，点击国家后自动筛选</div>
-    </div>
-  );
-}
 
 function Region2DMap({ config, data, onPickRegion }) {
   useEffect(() => {
@@ -647,6 +471,30 @@ function App() {
   }, []);
 
   const selectedSummary = useMemo(() => maps.find((item) => item.id === selectedId) || null, [maps, selectedId]);
+  const globePoints = useMemo(() => {
+    const activeId = selectedSummary?.id || selectedMap?.id || '';
+    return maps
+      .filter((item) => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude)))
+      .slice(0, 32)
+      .map((item) => {
+        const baseLabel = String(
+          item.city
+          || item.province
+          || item.country_name
+          || item.title
+          || item.file_name
+          || ''
+        ).trim();
+
+        return {
+          id: item.id,
+          latitude: Number(item.latitude),
+          longitude: Number(item.longitude),
+          label: baseLabel ? baseLabel.slice(0, 14) : '',
+          active: item.id === activeId
+        };
+      });
+  }, [maps, selectedMap?.id, selectedSummary?.id]);
   const detailImageSrc = useMemo(() => {
     if (!selectedMap?.id) return '';
     return buildFileUrl(selectedMap.id, { v: selectedMap?.mtime_ms || '' });
@@ -1241,6 +1089,11 @@ function App() {
           tags: (data.tags || []).join(', '),
           collection_unit: data.collection_unit || '',
           scope_level: data.scope_level || '',
+          campaign: data.campaign || '',
+          teaching_use: data.teaching_use || '',
+          teaching_note: data.teaching_note || '',
+          security_level: data.security_level || '',
+          storage_band: data.storage_band || '',
           country_code: data.country_code || '',
           country_name: data.country_name || '',
           province: data.province || '',
@@ -1478,6 +1331,8 @@ function App() {
           </div>
           <GlobeCountryPicker
             selectedCountry={filters.country}
+            getCountryLabel={toCountryLabel}
+            points={globePoints}
             onPickCountry={(item) => {
               patchFilters({
                 scope: '',
@@ -1590,6 +1445,19 @@ function App() {
                   <input value={uploadMeta.title} onChange={(e) => setUploadMeta((prev) => ({ ...prev, title: e.target.value }))} placeholder="批量标题（可选）" />
                   <input value={uploadMeta.year_label} onChange={(e) => setUploadMeta((prev) => ({ ...prev, year_label: e.target.value }))} placeholder="批量年代" />
                   <input value={uploadMeta.collection_unit} onChange={(e) => setUploadMeta((prev) => ({ ...prev, collection_unit: e.target.value }))} placeholder="收藏单位" />
+                  <input value={uploadMeta.campaign} onChange={(e) => setUploadMeta((prev) => ({ ...prev, campaign: e.target.value }))} placeholder="专题 / 战役" />
+                  <input value={uploadMeta.teaching_use} onChange={(e) => setUploadMeta((prev) => ({ ...prev, teaching_use: e.target.value }))} placeholder="教学用途" />
+                  <select value={uploadMeta.security_level} onChange={(e) => setUploadMeta((prev) => ({ ...prev, security_level: e.target.value }))}>
+                    <option value="">密级（默认）</option>
+                    <option value="内部教学">内部教学</option>
+                    <option value="内部资料">内部资料</option>
+                    <option value="保密审看">保密审看</option>
+                  </select>
+                  <select value={uploadMeta.storage_band} onChange={(e) => setUploadMeta((prev) => ({ ...prev, storage_band: e.target.value }))}>
+                    {STORAGE_BAND_OPTIONS.map((item) => (
+                      <option key={item.value || 'none'} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
                   <input value={uploadMeta.tags} onChange={(e) => setUploadMeta((prev) => ({ ...prev, tags: e.target.value }))} placeholder="批量标签，逗号分隔" />
                   <select value={uploadMeta.scope_level} onChange={(e) => setUploadMeta((prev) => ({ ...prev, scope_level: e.target.value }))}>
                     <option value="">范围（自动/空）</option>
@@ -1606,6 +1474,7 @@ function App() {
                   <input value={uploadMeta.latitude} onChange={(e) => setUploadMeta((prev) => ({ ...prev, latitude: e.target.value }))} placeholder="纬度" />
                   <input value={uploadMeta.longitude} onChange={(e) => setUploadMeta((prev) => ({ ...prev, longitude: e.target.value }))} placeholder="经度" />
                   <textarea value={uploadMeta.description} onChange={(e) => setUploadMeta((prev) => ({ ...prev, description: e.target.value }))} rows={2} placeholder="批量描述（可选）" />
+                  <textarea value={uploadMeta.teaching_note} onChange={(e) => setUploadMeta((prev) => ({ ...prev, teaching_note: e.target.value }))} rows={2} placeholder="批量授课备注（可选）" />
                   <label className="upload-meta-check">
                     <input type="checkbox" checked={uploadMeta.favorite} onChange={(e) => setUploadMeta((prev) => ({ ...prev, favorite: e.target.checked }))} />
                     上传后设为收藏
@@ -1674,7 +1543,9 @@ function App() {
                 key={item.id}
                 className={selectedId === item.id ? 'map-card active' : 'map-card'}
                 onClick={() => setSelectedId(item.id)}
+                data-band={item.storage_band || ''}
               >
+                <div className="map-card-band" />
                 <img
                   src={buildFileUrl(item.id, { max: thumbnailRequestMax, quality: 60, v: item.mtime_ms || '' })}
                   alt={item.title || item.file_name}
@@ -1822,12 +1693,41 @@ function App() {
                       <input value={form.collection_unit} onChange={(e) => setForm({ ...form, collection_unit: e.target.value })} />
                     </label>
                     <label>
+                      专题 / 战役
+                      <input value={form.campaign} onChange={(e) => setForm({ ...form, campaign: e.target.value })} />
+                    </label>
+                    <label>
+                      教学用途
+                      <input value={form.teaching_use} onChange={(e) => setForm({ ...form, teaching_use: e.target.value })} />
+                    </label>
+                    <label>
+                      密级
+                      <select value={form.security_level} onChange={(e) => setForm({ ...form, security_level: e.target.value })}>
+                        <option value="">未设置</option>
+                        <option value="内部教学">内部教学</option>
+                        <option value="内部资料">内部资料</option>
+                        <option value="保密审看">保密审看</option>
+                      </select>
+                    </label>
+                    <label>
+                      存储彩虹条
+                      <select value={form.storage_band} onChange={(e) => setForm({ ...form, storage_band: e.target.value })}>
+                        {STORAGE_BAND_OPTIONS.map((item) => (
+                          <option key={item.value || 'none'} value={item.value}>{item.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
                       标签
                       <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="多个标签用逗号分隔" />
                     </label>
                     <label className="full">
                       简介
                       <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
+                    </label>
+                    <label className="full">
+                      授课备注
+                      <textarea value={form.teaching_note} onChange={(e) => setForm({ ...form, teaching_note: e.target.value })} rows={3} placeholder="用于课堂讲解、地图判读重点、保密提醒等" />
                     </label>
                   </div>
                 </div>

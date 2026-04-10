@@ -29,6 +29,11 @@ db.exec(`
     latitude REAL,
     longitude REAL,
     year_label TEXT,
+    campaign TEXT,
+    teaching_use TEXT,
+    teaching_note TEXT,
+    security_level TEXT,
+    storage_band TEXT,
     mime TEXT,
     width INTEGER,
     height INTEGER,
@@ -83,6 +88,11 @@ maybeAddColumn('district TEXT');
 maybeAddColumn('latitude REAL');
 maybeAddColumn('longitude REAL');
 maybeAddColumn('year_label TEXT');
+maybeAddColumn('campaign TEXT');
+maybeAddColumn('teaching_use TEXT');
+maybeAddColumn('teaching_note TEXT');
+maybeAddColumn('security_level TEXT');
+maybeAddColumn('storage_band TEXT');
 maybeAddColumn('ocr_text TEXT');
 maybeAddColumn('ocr_blocks TEXT');
 maybeAddColumn('ocr_status TEXT');
@@ -114,6 +124,11 @@ export const statements = {
       latitude,
       longitude,
       year_label,
+      campaign,
+      teaching_use,
+      teaching_note,
+      security_level,
+      storage_band,
       mime,
       width,
       height,
@@ -148,6 +163,11 @@ export const statements = {
       @latitude,
       @longitude,
       @year_label,
+      @campaign,
+      @teaching_use,
+      @teaching_note,
+      @security_level,
+      @storage_band,
       @mime,
       @width,
       @height,
@@ -186,6 +206,11 @@ export const statements = {
       district = COALESCE(NULLIF(maps.district, ''), excluded.district),
       latitude = COALESCE(maps.latitude, excluded.latitude),
       longitude = COALESCE(maps.longitude, excluded.longitude),
+      campaign = COALESCE(NULLIF(maps.campaign, ''), excluded.campaign),
+      teaching_use = COALESCE(NULLIF(maps.teaching_use, ''), excluded.teaching_use),
+      teaching_note = COALESCE(NULLIF(maps.teaching_note, ''), excluded.teaching_note),
+      security_level = COALESCE(NULLIF(maps.security_level, ''), excluded.security_level),
+      storage_band = COALESCE(NULLIF(maps.storage_band, ''), excluded.storage_band),
       ocr_text = CASE
         WHEN maps.ocr_mtime_ms = excluded.mtime_ms THEN maps.ocr_text
         ELSE COALESCE(excluded.ocr_text, maps.ocr_text)
@@ -230,6 +255,11 @@ export const statements = {
         latitude = @latitude,
         longitude = @longitude,
         year_label = @year_label,
+        campaign = @campaign,
+        teaching_use = @teaching_use,
+        teaching_note = @teaching_note,
+        security_level = @security_level,
+        storage_band = @storage_band,
         updated_at = @updated_at
     WHERE id = @id
   `),

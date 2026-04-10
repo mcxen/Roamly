@@ -76,6 +76,13 @@ export const api = {
       body: JSON.stringify(payload)
     }));
   },
+  async batchUpdateMaps(ids, payload) {
+    return handle(await fetch('/api/maps/batch-update', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, ...(payload || {}) })
+    }));
+  },
   async toggleFavorite(id, favorite) {
     return handle(await fetch(`/api/maps/${id}/favorite`, {
       method: 'POST',
