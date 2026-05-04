@@ -24,7 +24,7 @@ final class RegionCatalog {
 
   private struct CountryRegionEntry: Decodable {
     let name: String
-    let shortCode: String
+    let shortCode: String?
   }
 
   private struct ChinaProvinceEntry: Decodable {
@@ -130,7 +130,7 @@ final class RegionCatalog {
       .map {
         let title = localizedRegionName($0.name, countryCode: country.countryShortCode)
         return SelectionOption(
-          id: $0.shortCode,
+          id: regionIdentifier(for: $0, countryCode: country.countryShortCode),
           title: title,
           subtitle: title == $0.name ? nil : $0.name,
           searchTokens: regionSearchTokens(for: $0.name, countryCode: country.countryShortCode)
@@ -264,6 +264,14 @@ final class RegionCatalog {
 
   private func regionSearchTokens(for regionName: String, countryCode: String) -> [String] {
     uniqueStrings([regionName] + (regionAliasMap[countryCode]?[regionName] ?? []))
+  }
+
+  private func regionIdentifier(for region: CountryRegionEntry, countryCode: String) -> String {
+    let shortCode = String(region.shortCode ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if !shortCode.isEmpty {
+      return shortCode
+    }
+    return "\(countryCode)-\(normalize(region.name))"
   }
 
   private func uniqueStrings(_ values: [String]) -> [String] {

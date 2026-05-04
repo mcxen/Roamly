@@ -22,6 +22,10 @@ struct MapRecord: Codable, Hashable {
   let district: String?
   let latitude: Double?
   let longitude: Double?
+  let northLatitude: Double?
+  let southLatitude: Double?
+  let eastLongitude: Double?
+  let westLongitude: Double?
   let yearLabel: String?
   let campaign: String?
   let teachingUse: String?
@@ -59,6 +63,10 @@ struct MapRecord: Codable, Hashable {
     case district
     case latitude
     case longitude
+    case northLatitude = "north_latitude"
+    case southLatitude = "south_latitude"
+    case eastLongitude = "east_longitude"
+    case westLongitude = "west_longitude"
     case yearLabel = "year_label"
     case campaign
     case teachingUse = "teaching_use"
@@ -132,6 +140,10 @@ struct MapRecord: Codable, Hashable {
       district: nil,
       latitude: nil,
       longitude: nil,
+      northLatitude: nil,
+      southLatitude: nil,
+      eastLongitude: nil,
+      westLongitude: nil,
       yearLabel: nil,
       campaign: nil,
       teachingUse: nil,
@@ -172,6 +184,10 @@ struct MapRecord: Codable, Hashable {
       district: district,
       latitude: latitude,
       longitude: longitude,
+      northLatitude: northLatitude,
+      southLatitude: southLatitude,
+      eastLongitude: eastLongitude,
+      westLongitude: westLongitude,
       yearLabel: yearLabel,
       campaign: campaign,
       teachingUse: teachingUse,
@@ -202,6 +218,7 @@ struct MapRecord: Codable, Hashable {
     teachingUse: String,
     teachingNote: String,
     securityLevel: String,
+    countryCode: String? = nil,
     countryName: String,
     province: String,
     city: String,
@@ -216,7 +233,7 @@ struct MapRecord: Codable, Hashable {
       tags: tags,
       collectionUnit: collectionUnit,
       scopeLevel: scopeLevel,
-      countryCode: countryCode,
+      countryCode: countryCode?.isEmpty == false ? countryCode : self.countryCode,
       countryName: countryName.isEmpty ? nil : countryName,
       province: province.isEmpty ? nil : province,
       relatedCountries: relatedCountries,
@@ -225,6 +242,10 @@ struct MapRecord: Codable, Hashable {
       district: district.isEmpty ? nil : district,
       latitude: latitude,
       longitude: longitude,
+      northLatitude: northLatitude,
+      southLatitude: southLatitude,
+      eastLongitude: eastLongitude,
+      westLongitude: westLongitude,
       yearLabel: yearLabel.isEmpty ? nil : yearLabel,
       campaign: campaign.isEmpty ? nil : campaign,
       teachingUse: teachingUse.isEmpty ? nil : teachingUse,
@@ -273,6 +294,10 @@ struct MapRecord: Codable, Hashable {
       district: district ?? self.district,
       latitude: latitude,
       longitude: longitude,
+      northLatitude: northLatitude,
+      southLatitude: southLatitude,
+      eastLongitude: eastLongitude,
+      westLongitude: westLongitude,
       yearLabel: yearLabel,
       campaign: campaign,
       teachingUse: teachingUse,

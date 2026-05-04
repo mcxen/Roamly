@@ -29,7 +29,7 @@ final class BackupViewController: UIViewController, PHPickerViewControllerDelega
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = UIColor(red: 0.95, green: 0.96, blue: 0.93, alpha: 1)
     configureLayout()
     refreshSummary()
   }
@@ -48,7 +48,7 @@ final class BackupViewController: UIViewController, PHPickerViewControllerDelega
     scrollView.addSubview(contentStack)
 
     contentStack.axis = .vertical
-    contentStack.spacing = 16
+    contentStack.spacing = 12
 
     [summaryCard, syncCard].forEach(configureCard)
     [statsTopRow, statsBottomRow].forEach {
@@ -65,8 +65,8 @@ final class BackupViewController: UIViewController, PHPickerViewControllerDelega
     statusLabel.textColor = .secondaryLabel
     statusLabel.numberOfLines = 0
 
-    configureButton(syncButton, title: "同步服务端地图", action: #selector(startSync))
-    configureButton(backupButton, title: "选择图片备份到服务器", action: #selector(pickPhotos))
+    configureButton(syncButton, title: "同步本地与云端", image: "arrow.triangle.2.circlepath", action: #selector(startSync))
+    configureButton(backupButton, title: "导入图片并备份", image: "photo.badge.plus", action: #selector(pickPhotos))
 
     let summaryStack = makeSectionStack(title: "库存统计")
     [summaryLabel, statsTopRow, statsBottomRow].forEach { summaryStack.addArrangedSubview($0) }
@@ -103,9 +103,11 @@ final class BackupViewController: UIViewController, PHPickerViewControllerDelega
   }
 
   private func configureCard(_ view: UIView) {
-    view.backgroundColor = .secondarySystemGroupedBackground
-    view.layer.cornerRadius = 22
+    view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+    view.layer.cornerRadius = 8
     view.layer.cornerCurve = .continuous
+    view.layer.borderWidth = 1
+    view.layer.borderColor = UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.26).cgColor
     view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16)
   }
 
@@ -116,17 +118,21 @@ final class BackupViewController: UIViewController, PHPickerViewControllerDelega
     stack.spacing = 14
 
     let titleLabel = UILabel()
-    titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
+    titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
     titleLabel.textColor = .label
     titleLabel.text = title
     stack.addArrangedSubview(titleLabel)
     return stack
   }
 
-  private func configureButton(_ button: UIButton, title: String, action: Selector) {
+  private func configureButton(_ button: UIButton, title: String, image: String, action: Selector) {
     var config = UIButton.Configuration.filled()
-    config.cornerStyle = .large
+    config.cornerStyle = .medium
     config.title = title
+    config.image = UIImage(systemName: image)
+    config.imagePadding = 8
+    config.baseBackgroundColor = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
+    config.baseForegroundColor = .white
     button.configuration = config
     button.addTarget(self, action: action, for: .touchUpInside)
   }
@@ -143,8 +149,8 @@ final class BackupViewController: UIViewController, PHPickerViewControllerDelega
     let pendingAI = records.filter(container.aiMetadataService.needsAI).count
 
     let serverState = container.settings.serverBaseURL == nil ? "未配置服务端" : "已配置服务端"
-    summaryLabel.text = "这里负责库存统计、同步和备份。整理任务已移动到整理页。当前服务端状态：\(serverState)。"
-    statusLabel.text = "服务端用于同步备份、导入和 OCR 搜索。主图库与整理流程优先使用本地缓存。"
+    summaryLabel.text = "本地原图优先保存，缩略图用于快速浏览；云端负责跨设备同步。当前服务端状态：\(serverState)。"
+    statusLabel.text = "可直接导入多张地图图片，保留本地副本，并在配置服务端后上传备份。离线 OCR 与整理流程不依赖网络。"
 
     renderStats(top: [
       ("总地图", "\(total)"),
@@ -267,9 +273,11 @@ private final class BackupStatCard: UIView {
   init(title: String, value: String) {
     super.init(frame: .zero)
     translatesAutoresizingMaskIntoConstraints = false
-    backgroundColor = .tertiarySystemGroupedBackground
-    layer.cornerRadius = 18
+    backgroundColor = UIColor(red: 0.96, green: 0.96, blue: 0.92, alpha: 1)
+    layer.cornerRadius = 8
     layer.cornerCurve = .continuous
+    layer.borderWidth = 1
+    layer.borderColor = UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.18).cgColor
 
     let titleLabel = UILabel()
     let valueLabel = UILabel()

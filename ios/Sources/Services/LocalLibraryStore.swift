@@ -1,6 +1,7 @@
 import Foundation
 #if canImport(UIKit)
 import UIKit
+import ImageIO
 #endif
 
 final class LocalLibraryStore {
@@ -129,6 +130,48 @@ final class LocalLibraryStore {
     try data.write(to: localThumbnailURL(for: record), options: .atomic)
   }
 
+  @discardableResult
+  func generateThumbnailIfNeeded(for record: MapRecord, maxPixelSize: CGFloat = 1280) -> Bool {
+    if hasLocalThumbnail(for: record) {
+      return false
+    }
+
+    let sourceURL: URL
+    let originalURL = localOriginalURL(for: record)
+    if fileManager.fileExists(atPath: originalURL.path) {
+      sourceURL = originalURL
+    } else {
+      return false
+    }
+
+    guard let data = Self.makeThumbnailData(fromFileAt: sourceURL, maxPixelSize: maxPixelSize) else {
+      return false
+    }
+    do {
+      try saveThumbnailData(data, for: record)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  @discardableResult
+  func generateMissingThumbnails(maxPixelSize: CGFloat = 1280, progress: ((Int, Int) -> Void)? = nil) -> Int {
+    let records = loadRecords()
+    guard !records.isEmpty else { return 0 }
+
+    var completed = 0
+    var generated = 0
+    for record in records {
+      if generateThumbnailIfNeeded(for: record, maxPixelSize: maxPixelSize) {
+        generated += 1
+      }
+      completed += 1
+      progress?(completed, records.count)
+    }
+    return generated
+  }
+
   func removeLocalOriginal(for record: MapRecord) {
     let url = localOriginalURL(for: record)
     guard fileManager.fileExists(atPath: url.path) else { return }
@@ -204,6 +247,26 @@ final class LocalLibraryStore {
         image.draw(in: CGRect(origin: .zero, size: targetSize))
       }
       return rendered.jpegData(compressionQuality: 0.82)
+    #else
+      return nil
+    #endif
+  }
+
+  private static func makeThumbnailData(fromFileAt url: URL, maxPixelSize: CGFloat) -> Data? {
+    #if canImport(UIKit)
+      let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+      guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else { return nil }
+
+      let downsampleOptions = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceShouldCacheImmediately: false,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: max(Int(maxPixelSize.rounded()), 1)
+      ] as CFDictionary
+
+      guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else { return nil }
+      let image = UIImage(cgImage: cgImage)
+      return image.jpegData(compressionQuality: 0.82)
     #else
       return nil
     #endif

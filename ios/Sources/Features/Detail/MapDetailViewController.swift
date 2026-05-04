@@ -134,7 +134,7 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       imageView.translatesAutoresizingMaskIntoConstraints = true
       imageView.contentMode = .scaleAspectFit
       imageView.backgroundColor = .clear
-      imageView.image = loadBestImage()
+      imageView.image = nil
 
       NSLayoutConstraint.activate([
         imageCard.topAnchor.constraint(equalTo: view.topAnchor),
@@ -187,7 +187,7 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     imageView.translatesAutoresizingMaskIntoConstraints = true
     imageView.contentMode = .scaleAspectFit
     imageView.backgroundColor = .clear
-    imageView.image = loadBestImage()
+    imageView.image = nil
     imageCard.addSubview(imageZoomScrollView)
     imageZoomScrollView.addSubview(imageContainerView)
     imageContainerView.addSubview(imageView)
@@ -473,6 +473,7 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       .split(separator: ",")
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty }
+    let resolvedCountryCode = container.regionCatalog.resolveCountryCode(for: selectedCountryName)
 
     let updated = record.withEditableMetadata(
       title: titleField.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? titleField.text!.trimmingCharacters(in: .whitespacesAndNewlines) : record.fileName,
@@ -482,6 +483,7 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       teachingUse: teachingUseField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
       teachingNote: teachingNoteView.text ?? "",
       securityLevel: securityLevelField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+      countryCode: resolvedCountryCode,
       countryName: selectedCountryName,
       province: selectedProvinceName,
       city: selectedCityName,
@@ -543,11 +545,6 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
         // Keep local detail if offline.
       }
     }
-  }
-
-  private func loadBestImage() -> UIImage? {
-    guard let url = preferredImageURL() else { return nil }
-    return UIImage(contentsOfFile: url.path)
   }
 
   private func preferredImageURL() -> URL? {
@@ -1009,48 +1006,27 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
 
   @objc private func selectCountry() {
     container.haptics.selectionChanged()
-    let options = container.regionCatalog.countryOptions()
-    presentSelection(title: "选择国家/地区", options: options) { [weak self] option in
-      guard let self else { return }
-      self.selectedCountryName = option.title
-      self.selectedProvinceName = ""
-      self.selectedCityName = ""
-      self.selectedDistrictName = ""
-      self.updateSelectionTitles()
-    }
+    presentRegionPicker(startingAt: .country)
   }
 
   @objc private func selectProvince() {
     container.haptics.selectionChanged()
-    let options = container.regionCatalog.provinceOptions(forCountryName: selectedCountryName)
-    guard !options.isEmpty else {
+    guard !container.regionCatalog.provinceOptions(forCountryName: selectedCountryName).isEmpty else {
       container.haptics.warning()
       showAlert(title: "暂无下级行政区", message: "当前国家未内置省/州数据。")
       return
     }
-    presentSelection(title: "选择省/州", options: options) { [weak self] option in
-      guard let self else { return }
-      self.selectedProvinceName = option.title
-      self.selectedCityName = ""
-      self.selectedDistrictName = ""
-      self.updateSelectionTitles()
-    }
+    presentRegionPicker(startingAt: .province)
   }
 
   @objc private func selectCity() {
     container.haptics.selectionChanged()
-    let options = container.regionCatalog.cityOptions(forCountryName: selectedCountryName, province: selectedProvinceName)
-    guard !options.isEmpty else {
+    guard !container.regionCatalog.cityOptions(forCountryName: selectedCountryName, province: selectedProvinceName).isEmpty else {
       container.haptics.warning()
       showAlert(title: "暂无城市列表", message: "当前内置城市下拉主要覆盖中国行政区，其他国家建议先选择州省，再用 OCR 辅助识别。")
       return
     }
-    presentSelection(title: "选择城市", options: options) { [weak self] option in
-      guard let self else { return }
-      self.selectedCityName = option.title
-      self.selectedDistrictName = ""
-      self.updateSelectionTitles()
-    }
+    presentRegionPicker(startingAt: .city)
   }
 
   @objc private func selectDistrict() {
@@ -1065,19 +1041,33 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       showAlert(title: "暂无区县列表", message: "当前选择下没有可用的区县行政区。")
       return
     }
-    presentSelection(title: "选择区/县/行政区", options: options) { [weak self] option in
-      guard let self else { return }
-      self.selectedDistrictName = option.title
-      self.updateSelectionTitles()
-    }
+    presentRegionPicker(startingAt: .district)
   }
 
-  private func presentSelection(title: String, options: [SelectionOption], onSelect: @escaping (SelectionOption) -> Void) {
-    let controller = SelectionListViewController(title: title, options: options, onSelect: onSelect)
+  private func presentRegionPicker(startingAt level: RegionPickerSheetViewController.Level) {
+    let controller = RegionPickerSheetViewController(
+      title: "选择地区",
+      regionCatalog: container.regionCatalog,
+      selection: RegionSelection(
+        country: selectedCountryName,
+        province: selectedProvinceName,
+        city: selectedCityName,
+        district: selectedDistrictName
+      ),
+      startingLevel: level
+    ) { [weak self] selection in
+      guard let self else { return }
+      self.selectedCountryName = selection.country
+      self.selectedProvinceName = selection.province
+      self.selectedCityName = selection.city
+      self.selectedDistrictName = selection.district
+      self.updateSelectionTitles()
+    }
     let nav = UINavigationController(rootViewController: controller)
     if let sheet = nav.sheetPresentationController {
       sheet.detents = [.medium(), .large()]
       sheet.prefersGrabberVisible = true
+      sheet.preferredCornerRadius = 28
     }
     present(nav, animated: true)
   }

@@ -90,6 +90,10 @@ final class APIClient {
     payload["district"] = record.district ?? ""
     payload["latitude"] = record.latitude as Any
     payload["longitude"] = record.longitude as Any
+    payload["north_latitude"] = record.northLatitude as Any
+    payload["south_latitude"] = record.southLatitude as Any
+    payload["east_longitude"] = record.eastLongitude as Any
+    payload["west_longitude"] = record.westLongitude as Any
     payload["year_label"] = record.yearLabel ?? ""
     payload["campaign"] = record.campaign ?? ""
     payload["teaching_use"] = record.teachingUse ?? ""

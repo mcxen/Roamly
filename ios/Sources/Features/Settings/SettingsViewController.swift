@@ -16,6 +16,8 @@ final class SettingsViewController: UIViewController {
   private let aiPromptView = UITextView()
   private let sizeControl = UISegmentedControl(items: AppSettings.ThumbnailSize.allCases.map(\.title))
   private let titleSwitch = UISwitch()
+  private let thumbnailBuildButton = UIButton(type: .system)
+  private let thumbnailBuildLabel = UILabel()
   private let interfaceStyleControl = UISegmentedControl(items: AppSettings.InterfaceStyle.allCases.map(\.title))
   private let statusLabel = UILabel()
   private let serverLatencyLabel = UILabel()
@@ -35,7 +37,7 @@ final class SettingsViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = UIColor(red: 0.95, green: 0.96, blue: 0.93, alpha: 1)
     configureLayout()
     loadSettings()
   }
@@ -79,15 +81,16 @@ final class SettingsViewController: UIViewController {
     styleField(aiModelField)
 
     aiPromptView.backgroundColor = .tertiarySystemGroupedBackground
-    aiPromptView.layer.cornerRadius = 14
+    aiPromptView.layer.cornerRadius = 8
     aiPromptView.layer.cornerCurve = .continuous
     aiPromptView.font = .systemFont(ofSize: 14, weight: .medium)
     aiPromptView.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 12, right: 10)
     aiPromptView.heightAnchor.constraint(equalToConstant: 180).isActive = true
 
-    sizeControl.selectedSegmentTintColor = .systemBlue
-    titleSwitch.onTintColor = .systemBlue
-    interfaceStyleControl.selectedSegmentTintColor = .systemBlue
+    let olive = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
+    sizeControl.selectedSegmentTintColor = olive
+    titleSwitch.onTintColor = olive
+    interfaceStyleControl.selectedSegmentTintColor = olive
     sizeControl.addTarget(self, action: #selector(previewSelectionHaptic), for: .valueChanged)
     titleSwitch.addTarget(self, action: #selector(previewSelectionHaptic), for: .valueChanged)
     interfaceStyleControl.addTarget(self, action: #selector(previewInterfaceStyleChange), for: .valueChanged)
@@ -101,10 +104,24 @@ final class SettingsViewController: UIViewController {
       $0.textColor = .secondaryLabel
       $0.text = "未测试"
     }
+    thumbnailBuildLabel.numberOfLines = 1
+    thumbnailBuildLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    thumbnailBuildLabel.textColor = .secondaryLabel
+    thumbnailBuildLabel.text = "未执行"
+
+    var thumbConfig = UIButton.Configuration.tinted()
+    thumbConfig.cornerStyle = .medium
+    thumbConfig.title = "补齐首页缩略图"
+    thumbConfig.image = UIImage(systemName: "photo.stack")
+    thumbConfig.imagePadding = 6
+    thumbnailBuildButton.configuration = thumbConfig
+    thumbnailBuildButton.addTarget(self, action: #selector(buildLibraryThumbnails), for: .touchUpInside)
 
     var buttonConfig = UIButton.Configuration.filled()
-    buttonConfig.cornerStyle = .large
+    buttonConfig.cornerStyle = .medium
     buttonConfig.title = "保存设置"
+    buttonConfig.baseBackgroundColor = olive
+    buttonConfig.baseForegroundColor = .white
     saveButton.configuration = buttonConfig
     saveButton.addTarget(self, action: #selector(saveSettings), for: .touchUpInside)
 
@@ -118,7 +135,8 @@ final class SettingsViewController: UIViewController {
 
     let libraryStack = makeSectionStack(title: "首页显示")
     libraryStack.addArrangedSubview(makeLabeledField(title: "图片尺寸", view: sizeControl))
-    libraryStack.addArrangedSubview(makeSwitchRow(title: "显示名称", subtitle: "名称会以透明叠字显示在图片下方区域", toggle: titleSwitch))
+    libraryStack.addArrangedSubview(makeSwitchRow(title: "显示位置信息", subtitle: "在首页卡片下方显示地区与年代信息，不显示图片文件标题", toggle: titleSwitch))
+    libraryStack.addArrangedSubview(makeLabeledField(title: "缩略图缓存", view: makeThumbnailBuildRow()))
     libraryCard.addSubview(libraryStack)
     let aiStack = makeSectionStack(title: "AI 编目")
     [
@@ -141,7 +159,7 @@ final class SettingsViewController: UIViewController {
       scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
 
       stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 18),
       stackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
@@ -172,15 +190,17 @@ final class SettingsViewController: UIViewController {
   }
 
   private func configureCard(_ view: UIView) {
-    view.backgroundColor = .secondarySystemGroupedBackground
-    view.layer.cornerRadius = 22
+    view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+    view.layer.cornerRadius = 8
     view.layer.cornerCurve = .continuous
+    view.layer.borderWidth = 1
+    view.layer.borderColor = UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.26).cgColor
     view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16)
   }
 
   private func styleField(_ field: UITextField) {
     field.backgroundColor = .tertiarySystemGroupedBackground
-    field.layer.cornerRadius = 14
+    field.layer.cornerRadius = 8
     field.layer.cornerCurve = .continuous
     field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
     field.leftViewMode = .always
@@ -253,6 +273,14 @@ final class SettingsViewController: UIViewController {
     row.axis = .horizontal
     row.alignment = .center
     row.spacing = 8
+    return row
+  }
+
+  private func makeThumbnailBuildRow() -> UIView {
+    let row = UIStackView(arrangedSubviews: [thumbnailBuildLabel, thumbnailBuildButton])
+    row.axis = .horizontal
+    row.alignment = .center
+    row.spacing = 10
     return row
   }
 
@@ -337,6 +365,31 @@ final class SettingsViewController: UIViewController {
     container.haptics.selectionChanged()
     let selection = AppSettings.InterfaceStyle.allCases[interfaceStyleControl.selectedSegmentIndex]
     applyInterfaceStyle(selection: selection)
+  }
+
+  @objc private func buildLibraryThumbnails() {
+    container.haptics.selectionChanged()
+    thumbnailBuildButton.isEnabled = false
+    thumbnailBuildLabel.text = "处理中…"
+
+    Task { [weak self] in
+      guard let self else { return }
+      let store = self.container.store
+      let generated = await Task.detached(priority: .utility) {
+        store.generateMissingThumbnails(maxPixelSize: 1280)
+      }.value
+
+      await MainActor.run {
+        self.thumbnailBuildButton.isEnabled = true
+        self.thumbnailBuildLabel.text = generated == 0 ? "已是最新" : "新增 \(generated) 张"
+        if generated > 0 {
+          self.container.haptics.success()
+          NotificationCenter.default.post(name: .appSettingsDidChange, object: nil)
+        } else {
+          self.container.haptics.selectionChanged()
+        }
+      }
+    }
   }
 
   private func applyInterfaceStyle(selection: AppSettings.InterfaceStyle) {

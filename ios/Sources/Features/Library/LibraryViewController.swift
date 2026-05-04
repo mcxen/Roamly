@@ -4,6 +4,24 @@ import UniformTypeIdentifiers
 import ImageIO
 
 final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UISearchResultsUpdating, PHPickerViewControllerDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching {
+  private enum LibraryFilter: Int, CaseIterable {
+    case all
+    case local
+    case cloud
+    case needsWork
+    case favorite
+
+    var title: String {
+      switch self {
+      case .all: return "全部"
+      case .local: return "本地"
+      case .cloud: return "云端"
+      case .needsWork: return "未整理"
+      case .favorite: return "收藏"
+      }
+    }
+  }
+
   fileprivate enum AssetState {
     case localOriginal
     case localThumbnail
@@ -35,7 +53,15 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   private let container: AppContainer
   private var allRecords: [MapRecord] = []
   private var visibleRecords: [MapRecord] = []
+  private var activeFilter: LibraryFilter = .all
 
+  private let headerStack = UIStackView()
+  private let filterStack = UIStackView()
+  private let summaryRow = UIStackView()
+  private let countLabel = UILabel()
+  private let sortLabel = UILabel()
+  private let syncBadge = UILabel()
+  private var filterButtons: [UIButton] = []
   private let collectionView: UICollectionView
   private let imageCache = NSCache<NSString, UIImage>()
   private let searchController = UISearchController(searchResultsController: nil)
@@ -43,18 +69,20 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   private var pendingRestoreOffset: CGPoint?
   private var pendingRestoreRecordID: String?
   private var imageLoadTasks: [String: Task<UIImage?, Never>] = [:]
+  private var thumbnailGenerationTasks: [String: Task<Bool, Never>] = [:]
+  private var thumbnailWarmupTask: Task<Void, Never>?
   private var lastResolvedLayoutWidth: CGFloat = 0
 
   init(container: AppContainer) {
     self.container = container
     let layout = UICollectionViewFlowLayout()
-    layout.minimumInteritemSpacing = 14
-    layout.minimumLineSpacing = 14
-    layout.sectionInset = UIEdgeInsets(top: 16, left: 20, bottom: 120, right: 20)
+    layout.minimumInteritemSpacing = 0
+    layout.minimumLineSpacing = 12
+    layout.sectionInset = UIEdgeInsets(top: 10, left: 14, bottom: 120, right: 14)
     self.collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
     super.init(nibName: nil, bundle: nil)
-    title = "地图"
-    tabBarItem.title = "地图"
+    title = "图库"
+    tabBarItem.title = "图库"
   }
 
   @available(*, unavailable)
@@ -64,14 +92,19 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
   deinit {
     NotificationCenter.default.removeObserver(self)
+    thumbnailWarmupTask?.cancel()
+    thumbnailGenerationTasks.values.forEach { $0.cancel() }
   }
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
-    navigationItem.largeTitleDisplayMode = .automatic
-    navigationItem.rightBarButtonItem = UIBarButtonItem(title: "导入", style: .plain, target: self, action: #selector(importImages))
+    view.backgroundColor = UIColor.roamlyCanvas
+    navigationItem.largeTitleDisplayMode = .never
+    let importItem = UIBarButtonItem(image: UIImage(systemName: "plus.circle.fill"), style: .plain, target: self, action: #selector(importImages))
+    importItem.accessibilityLabel = "导入图片"
+    navigationItem.rightBarButtonItem = importItem
     configureSearch()
+    configureHeader()
     configureCollectionView()
     configureEmptyState()
     NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: .appSettingsDidChange, object: nil)
@@ -113,15 +146,67 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   private func configureSearch() {
     searchController.obscuresBackgroundDuringPresentation = false
     searchController.searchResultsUpdater = self
-    searchController.searchBar.placeholder = "搜索 OCR、标题、地区、专题"
+    searchController.searchBar.placeholder = "搜索地图名称、地区、年代、来源、标签..."
+    searchController.searchBar.searchBarStyle = .minimal
     navigationItem.searchController = searchController
     navigationItem.hidesSearchBarWhenScrolling = false
     definesPresentationContext = true
   }
 
+  private func configureHeader() {
+    [headerStack, filterStack, summaryRow, countLabel, sortLabel, syncBadge].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    headerStack.axis = .vertical
+    headerStack.spacing = 12
+    view.addSubview(headerStack)
+
+    filterStack.axis = .horizontal
+    filterStack.spacing = 8
+    filterStack.distribution = .fillProportionally
+    filterButtons = LibraryFilter.allCases.map { filter in
+      let button = UIButton(type: .system)
+      button.translatesAutoresizingMaskIntoConstraints = false
+      button.tag = filter.rawValue
+      button.addTarget(self, action: #selector(filterTapped(_:)), for: .touchUpInside)
+      button.heightAnchor.constraint(equalToConstant: 34).isActive = true
+      filterStack.addArrangedSubview(button)
+      return button
+    }
+
+    countLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+    countLabel.textColor = .secondaryLabel
+    sortLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+    sortLabel.textColor = .label
+    sortLabel.textAlignment = .right
+    sortLabel.text = "最新导入 ↓"
+
+    syncBadge.font = .systemFont(ofSize: 13, weight: .semibold)
+    syncBadge.textAlignment = .center
+    syncBadge.layer.cornerRadius = 14
+    syncBadge.layer.cornerCurve = .continuous
+    syncBadge.layer.masksToBounds = true
+    syncBadge.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.72)
+    syncBadge.layer.borderWidth = 1
+    syncBadge.layer.borderColor = UIColor.roamlyHairline.cgColor
+
+    summaryRow.axis = .horizontal
+    summaryRow.alignment = .center
+    summaryRow.spacing = 10
+    summaryRow.addArrangedSubview(countLabel)
+    summaryRow.addArrangedSubview(UIView())
+    summaryRow.addArrangedSubview(syncBadge)
+    summaryRow.addArrangedSubview(sortLabel)
+
+    headerStack.addArrangedSubview(filterStack)
+    headerStack.addArrangedSubview(summaryRow)
+    refreshFilterButtons()
+  }
+
   private func configureCollectionView() {
     collectionView.translatesAutoresizingMaskIntoConstraints = false
-    collectionView.backgroundColor = .clear
+    collectionView.backgroundColor = UIColor.roamlyCanvas
     collectionView.alwaysBounceVertical = true
     collectionView.contentInsetAdjustmentBehavior = .always
     collectionView.dataSource = self
@@ -131,7 +216,11 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     view.addSubview(collectionView)
 
     NSLayoutConstraint.activate([
-      collectionView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+      headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
+      headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
+
+      collectionView.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 6),
       collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -159,6 +248,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     captureScrollPosition()
     allRecords = container.store.loadRecords().sorted { $0.importedAt > $1.importedAt }
     applySearch()
+    warmupMissingThumbnails()
   }
 
   private func applySearch() {
@@ -166,15 +256,56 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .lowercased()
 
-    if query.isEmpty {
-      visibleRecords = allRecords
-    } else {
-      visibleRecords = allRecords.filter { $0.searchableText.contains(query) }
+    let filtered = allRecords.filter { record in
+      switch activeFilter {
+      case .all:
+        return true
+      case .local:
+        return container.store.hasLocalOriginal(for: record) || container.store.hasLocalThumbnail(for: record)
+      case .cloud:
+        return !container.store.hasLocalOriginal(for: record)
+      case .needsWork:
+        return record.needsLibraryWork
+      case .favorite:
+        return record.favorite
+      }
     }
+
+    visibleRecords = query.isEmpty ? filtered : filtered.filter { $0.searchableText.contains(query) }
 
     collectionView.reloadData()
     emptyLabel.isHidden = !visibleRecords.isEmpty
+    refreshHeaderSummary()
     restoreScrollPositionIfNeeded()
+  }
+
+  private func refreshHeaderSummary() {
+    countLabel.text = "共 \(allRecords.count) 张地图"
+    let local = allRecords.filter { container.store.hasLocalOriginal(for: $0) || container.store.hasLocalThumbnail(for: $0) }.count
+    let synced = allRecords.filter { !$0.id.hasPrefix("local-") || $0.source == "local-seed" }.count
+    syncBadge.text = "  同步 \(min(synced, allRecords.count))/\(max(allRecords.count, 1))  "
+    if activeFilter != .all || !(searchController.searchBar.text ?? "").isEmpty {
+      countLabel.text = "显示 \(visibleRecords.count) / \(allRecords.count) 张，本地 \(local)"
+    }
+    refreshFilterButtons()
+  }
+
+  private func refreshFilterButtons() {
+    for button in filterButtons {
+      guard let filter = LibraryFilter(rawValue: button.tag) else { continue }
+      var config = UIButton.Configuration.filled()
+      config.cornerStyle = .capsule
+      config.title = filter.title
+      config.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14)
+      config.baseBackgroundColor = filter == activeFilter ? UIColor.roamlyOlive : UIColor.systemBackground.withAlphaComponent(0.78)
+      config.baseForegroundColor = filter == activeFilter ? .white : .label
+      button.configuration = config
+      button.layer.cornerRadius = 17
+      button.layer.cornerCurve = .continuous
+      button.layer.borderWidth = filter == activeFilter ? 0 : 1
+      button.layer.borderColor = UIColor.roamlyHairline.cgColor
+      button.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+    }
   }
 
   private func assetState(for record: MapRecord) -> AssetState {
@@ -204,12 +335,11 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   }
 
   private func preferredImageURL(for record: MapRecord) -> URL? {
-    let candidateURLs = [
-      container.store.localThumbnailURL(for: record),
-      container.store.localOriginalURL(for: record)
-    ]
-
-    return candidateURLs.first { FileManager.default.fileExists(atPath: $0.path) }
+    let thumbnailURL = container.store.localThumbnailURL(for: record)
+    guard FileManager.default.fileExists(atPath: thumbnailURL.path) else {
+      return nil
+    }
+    return thumbnailURL
   }
 
   private func loadImageIfNeeded(for record: MapRecord, targetSize: CGSize, completion: @escaping (UIImage?) -> Void) {
@@ -225,6 +355,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     }
 
     guard let imageURL = preferredImageURL(for: record) else {
+      ensureThumbnailGeneration(for: record, reloadOnCompletion: true)
       completion(nil)
       return
     }
@@ -252,7 +383,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
 
   private func requestImage(for cell: MapGridCell, record: MapRecord, at indexPath: IndexPath) {
     let size = resolvedGridLayout(for: collectionView.bounds.width)
-    let targetSize = CGSize(width: size.width, height: size.imageHeight)
+    let targetSize = CGSize(width: 120, height: size.imageHeight)
     if let image = previewImage(for: record, targetSize: targetSize) {
       cell.apply(image: image)
       return
@@ -295,6 +426,13 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     let picker = PHPickerViewController(configuration: configuration)
     picker.delegate = self
     present(picker, animated: true)
+  }
+
+  @objc private func filterTapped(_ sender: UIButton) {
+    guard let filter = LibraryFilter(rawValue: sender.tag) else { return }
+    container.haptics.selectionChanged()
+    activeFilter = filter
+    applySearch()
   }
 
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
@@ -373,9 +511,9 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
       state: assetState(for: record),
       subtitle: record.subtitleText,
       imageHeight: size.imageHeight,
-      showTitle: false
+      showMetadata: container.settings.showTitlesOnLibrary
     )
-    cell.apply(image: previewImage(for: record, targetSize: CGSize(width: size.width, height: size.imageHeight)))
+    cell.apply(image: previewImage(for: record, targetSize: CGSize(width: 120, height: size.imageHeight)))
     requestImage(for: cell, record: record, at: indexPath)
     return cell
   }
@@ -392,32 +530,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   }
 
   private func resolvedGridLayout(for availableWidth: CGFloat) -> (width: CGFloat, imageHeight: CGFloat, itemHeight: CGFloat) {
-    let columns: CGFloat
-
-    let isPad = traitCollection.userInterfaceIdiom == .pad
-    switch (container.settings.thumbnailSize, isPad) {
-    case (.compact, true):
-      columns = availableWidth > 1100 ? 6 : 5
-    case (.standard, true):
-      columns = availableWidth > 1100 ? 4 : 3
-    case (.large, true):
-      columns = 2
-    case (.compact, false):
-      columns = 3
-    case (.standard, false):
-      columns = 2
-    case (.large, false):
-      columns = 1
-    }
-
     let layout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout
-    let spacing = layout?.minimumInteritemSpacing ?? 10
     let sectionInset = layout?.sectionInset ?? .zero
-    let contentWidth = availableWidth - sectionInset.left - sectionInset.right - spacing * (columns - 1)
-    let itemWidth = floor(contentWidth / columns)
-    let imageHeight = container.settings.thumbnailSize == .large ? floor(itemWidth * 0.7) : floor(itemWidth * 0.86)
-    let metadataHeight: CGFloat = container.settings.showTitlesOnLibrary ? 78 : 54
-    return (itemWidth, imageHeight, imageHeight + metadataHeight)
+    let itemWidth = floor(availableWidth - sectionInset.left - sectionInset.right)
+    let isPad = traitCollection.userInterfaceIdiom == .pad
+    let itemHeight: CGFloat = isPad ? 238 : 180
+    return (itemWidth, isPad ? 170 : 126, itemHeight)
   }
 
   private func captureScrollPosition() {
@@ -532,6 +650,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     let targetSize = CGSize(width: size.width, height: size.imageHeight)
     for indexPath in indexPaths where visibleRecords.indices.contains(indexPath.item) {
       let record = visibleRecords[indexPath.item]
+      ensureThumbnailGeneration(for: record, reloadOnCompletion: false)
       loadImageIfNeeded(for: record, targetSize: targetSize) { _ in }
     }
   }
@@ -543,39 +662,127 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
       imageLoadTasks[record.id] = nil
     }
   }
+
+  private func warmupMissingThumbnails() {
+    thumbnailWarmupTask?.cancel()
+    let records = allRecords
+    guard !records.isEmpty else { return }
+
+    thumbnailWarmupTask = Task(priority: .utility) { [weak self] in
+      guard let self else { return }
+      var generatedCount = 0
+
+      for record in records {
+        if Task.isCancelled { return }
+        if self.container.store.hasLocalThumbnail(for: record) {
+          continue
+        }
+
+        let generated = await self.ensureThumbnailGenerationTask(for: record).value
+        if generated {
+          generatedCount += 1
+          if generatedCount % 24 == 0 {
+            await MainActor.run {
+              self.collectionView.reloadData()
+            }
+          }
+        }
+      }
+
+      if generatedCount > 0 {
+        await MainActor.run {
+          self.imageCache.removeAllObjects()
+          self.collectionView.reloadData()
+        }
+      }
+    }
+  }
+
+  private func ensureThumbnailGeneration(for record: MapRecord, reloadOnCompletion: Bool) {
+    guard !container.store.hasLocalThumbnail(for: record) else { return }
+    let task = ensureThumbnailGenerationTask(for: record)
+    guard reloadOnCompletion else { return }
+
+    Task { [weak self] in
+      guard let self else { return }
+      let generated = await task.value
+      guard generated else { return }
+      await MainActor.run {
+        self.imageCache.removeAllObjects()
+        if let index = self.visibleRecords.firstIndex(where: { $0.id == record.id }) {
+          let indexPath = IndexPath(item: index, section: 0)
+          if self.collectionView.indexPathsForVisibleItems.contains(indexPath) {
+            self.collectionView.reloadItems(at: [indexPath])
+          }
+        }
+      }
+    }
+  }
+
+  private func ensureThumbnailGenerationTask(for record: MapRecord) -> Task<Bool, Never> {
+    if let existing = thumbnailGenerationTasks[record.id] {
+      return existing
+    }
+
+    let task = Task(priority: .utility) { [weak self] in
+      guard let self else { return false }
+      return self.container.store.generateThumbnailIfNeeded(for: record, maxPixelSize: 1280)
+    }
+    thumbnailGenerationTasks[record.id] = task
+
+    Task { [weak self] in
+      _ = await task.value
+      await MainActor.run {
+        self?.thumbnailGenerationTasks[record.id] = nil
+      }
+    }
+
+    return task
+  }
 }
 
 private final class MapGridCell: UICollectionViewCell {
   private let imageView = UIImageView()
   private let imageContainerView = UIView()
+  private let favoriteBadge = UIImageView(image: UIImage(systemName: "star.fill"))
+  private let contentStack = UIStackView()
   private let metadataStack = UIStackView()
   private let titleLabel = UILabel()
-  private let subtitleLabel = UILabel()
-  private let statusLabel = UILabel()
+  private let detailLabel = UILabel()
+  private let ocrBadge = UILabel()
+  private let localBadge = UILabel()
+  private let syncBadge = UILabel()
+  private let tagStack = UIStackView()
+  private let outlineView = CoverageOutlineView()
+  private let rangeLabel = UILabel()
+  private let moreButton = UIButton(type: .system)
   private var imageHeightConstraint: NSLayoutConstraint?
+  private var imageWidthConstraint: NSLayoutConstraint?
   fileprivate private(set) var representedRecordID: String?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
-    contentView.backgroundColor = .secondarySystemGroupedBackground
-    contentView.layer.cornerRadius = 22
+    contentView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+    contentView.layer.cornerRadius = 8
     contentView.layer.cornerCurve = .continuous
     contentView.layer.masksToBounds = true
 
     contentView.layer.borderWidth = 1
-    contentView.layer.borderColor = UIColor.separator.withAlphaComponent(0.18).cgColor
+    contentView.layer.borderColor = UIColor.roamlyHairline.cgColor
 
-    [imageContainerView, metadataStack, statusLabel].forEach {
+    [imageContainerView, contentStack, outlineView, rangeLabel, moreButton].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
       contentView.addSubview($0)
     }
 
-    imageContainerView.layer.cornerRadius = 18
+    imageContainerView.layer.cornerRadius = 7
     imageContainerView.layer.cornerCurve = .continuous
     imageContainerView.layer.masksToBounds = true
-    imageContainerView.backgroundColor = .tertiarySystemFill
-    imageHeightConstraint = imageContainerView.heightAnchor.constraint(equalToConstant: 180)
+    imageContainerView.backgroundColor = UIColor(red: 0.84, green: 0.86, blue: 0.78, alpha: 1)
+    imageHeightConstraint = imageContainerView.heightAnchor.constraint(equalToConstant: 126)
+    imageWidthConstraint = imageContainerView.widthAnchor.constraint(equalToConstant: 170)
     imageHeightConstraint?.isActive = true
+    imageWidthConstraint?.isActive = true
 
     imageView.translatesAutoresizingMaskIntoConstraints = false
     imageView.contentMode = .scaleAspectFill
@@ -583,46 +790,109 @@ private final class MapGridCell: UICollectionViewCell {
     imageView.backgroundColor = .secondarySystemFill
     imageContainerView.addSubview(imageView)
 
+    favoriteBadge.translatesAutoresizingMaskIntoConstraints = false
+    favoriteBadge.tintColor = UIColor(red: 0.88, green: 0.67, blue: 0.12, alpha: 1)
+    favoriteBadge.backgroundColor = UIColor.roamlyOlive.withAlphaComponent(0.84)
+    favoriteBadge.layer.cornerRadius = 7
+    favoriteBadge.layer.cornerCurve = .continuous
+    favoriteBadge.contentMode = .center
+    favoriteBadge.clipsToBounds = true
+    imageContainerView.addSubview(favoriteBadge)
+
+    contentStack.axis = .vertical
+    contentStack.spacing = 6
+    contentStack.alignment = .fill
+
     metadataStack.axis = .vertical
-    metadataStack.spacing = 4
+    metadataStack.spacing = 5
 
-    titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+    titleLabel.font = .systemFont(ofSize: 15, weight: .bold)
     titleLabel.textColor = .label
-    titleLabel.numberOfLines = 2
+    titleLabel.numberOfLines = 1
+    titleLabel.adjustsFontSizeToFitWidth = true
+    titleLabel.minimumScaleFactor = 0.82
 
-    subtitleLabel.font = .systemFont(ofSize: 12, weight: .medium)
-    subtitleLabel.textColor = .secondaryLabel
-    subtitleLabel.numberOfLines = 2
+    detailLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    detailLabel.textColor = .secondaryLabel
+    detailLabel.numberOfLines = 3
 
     metadataStack.addArrangedSubview(titleLabel)
-    metadataStack.addArrangedSubview(subtitleLabel)
+    metadataStack.addArrangedSubview(detailLabel)
 
-    statusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-    statusLabel.textAlignment = .center
-    statusLabel.layer.cornerRadius = 11
-    statusLabel.layer.cornerCurve = .continuous
-    statusLabel.layer.masksToBounds = true
+    [ocrBadge, localBadge, syncBadge].forEach {
+      $0.font = .systemFont(ofSize: 10, weight: .bold)
+      $0.textAlignment = .center
+      $0.layer.cornerRadius = 6
+      $0.layer.cornerCurve = .continuous
+      $0.layer.masksToBounds = true
+      $0.heightAnchor.constraint(equalToConstant: 24).isActive = true
+    }
+
+    let badgeRow = UIStackView(arrangedSubviews: [ocrBadge, localBadge, syncBadge, UIView()])
+    badgeRow.axis = .horizontal
+    badgeRow.spacing = 6
+    badgeRow.alignment = .center
+
+    tagStack.axis = .horizontal
+    tagStack.spacing = 6
+    tagStack.alignment = .leading
+    tagStack.distribution = .fillProportionally
+
+    contentStack.addArrangedSubview(metadataStack)
+    contentStack.addArrangedSubview(badgeRow)
+    contentStack.addArrangedSubview(tagStack)
+
+    outlineView.backgroundColor = UIColor(red: 0.98, green: 0.98, blue: 0.95, alpha: 1)
+    outlineView.layer.cornerRadius = 6
+    outlineView.layer.cornerCurve = .continuous
+    outlineView.layer.borderWidth = 1
+    outlineView.layer.borderColor = UIColor.roamlyHairline.cgColor
+    outlineView.clipsToBounds = true
+
+    rangeLabel.font = .systemFont(ofSize: 10, weight: .medium)
+    rangeLabel.textColor = .secondaryLabel
+    rangeLabel.numberOfLines = 3
+
+    var moreConfig = UIButton.Configuration.plain()
+    moreConfig.image = UIImage(systemName: "ellipsis")
+    moreConfig.baseForegroundColor = .label
+    moreButton.configuration = moreConfig
+    moreButton.isUserInteractionEnabled = false
 
     NSLayoutConstraint.activate([
-      imageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-      imageContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
-      imageContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+      imageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+      imageContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
 
       imageView.topAnchor.constraint(equalTo: imageContainerView.topAnchor),
       imageView.leadingAnchor.constraint(equalTo: imageContainerView.leadingAnchor),
       imageView.trailingAnchor.constraint(equalTo: imageContainerView.trailingAnchor),
       imageView.bottomAnchor.constraint(equalTo: imageContainerView.bottomAnchor),
 
-      statusLabel.topAnchor.constraint(equalTo: imageContainerView.topAnchor, constant: 10),
-      statusLabel.trailingAnchor.constraint(equalTo: imageContainerView.trailingAnchor, constant: -10),
-      statusLabel.heightAnchor.constraint(equalToConstant: 22),
-      statusLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 52),
+      favoriteBadge.topAnchor.constraint(equalTo: imageContainerView.topAnchor),
+      favoriteBadge.leadingAnchor.constraint(equalTo: imageContainerView.leadingAnchor),
+      favoriteBadge.widthAnchor.constraint(equalToConstant: 30),
+      favoriteBadge.heightAnchor.constraint(equalToConstant: 30),
 
-      metadataStack.topAnchor.constraint(equalTo: imageContainerView.bottomAnchor, constant: 12),
-      metadataStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-      metadataStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
-      metadataStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
-      contentView.bottomAnchor.constraint(greaterThanOrEqualTo: metadataStack.bottomAnchor, constant: 12)
+      contentStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
+      contentStack.leadingAnchor.constraint(equalTo: imageContainerView.trailingAnchor, constant: 12),
+      contentStack.trailingAnchor.constraint(equalTo: outlineView.leadingAnchor, constant: -10),
+
+      outlineView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 50),
+      outlineView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+      outlineView.widthAnchor.constraint(equalToConstant: 74),
+      outlineView.heightAnchor.constraint(equalToConstant: 56),
+
+      rangeLabel.topAnchor.constraint(equalTo: outlineView.bottomAnchor, constant: 6),
+      rangeLabel.leadingAnchor.constraint(equalTo: outlineView.leadingAnchor),
+      rangeLabel.trailingAnchor.constraint(equalTo: outlineView.trailingAnchor),
+
+      moreButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+      moreButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4),
+      moreButton.widthAnchor.constraint(equalToConstant: 34),
+      moreButton.heightAnchor.constraint(equalToConstant: 34),
+
+      imageContainerView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -14),
+      contentStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12)
     ])
   }
 
@@ -635,22 +905,225 @@ private final class MapGridCell: UICollectionViewCell {
     super.prepareForReuse()
     representedRecordID = nil
     imageView.image = nil
+    tagStack.arrangedSubviews.forEach {
+      tagStack.removeArrangedSubview($0)
+      $0.removeFromSuperview()
+    }
   }
 
-  func configure(record: MapRecord, state: LibraryViewController.AssetState, subtitle: String, imageHeight: CGFloat, showTitle: Bool) {
+  func configure(record: MapRecord, state: LibraryViewController.AssetState, subtitle: String, imageHeight: CGFloat, showMetadata: Bool) {
     representedRecordID = record.id
     imageHeightConstraint?.constant = imageHeight
-    titleLabel.text = showTitle ? record.title : nil
-    titleLabel.isHidden = !showTitle
-    subtitleLabel.text = subtitle
-    subtitleLabel.numberOfLines = showTitle ? 2 : 3
-    statusLabel.text = " \(state.title) "
-    statusLabel.backgroundColor = state.tintColor.withAlphaComponent(0.14)
-    statusLabel.textColor = state.tintColor
+    imageWidthConstraint?.constant = 120
+    titleLabel.text = record.title
+    detailLabel.text = [
+      iconLine("calendar", record.yearLabel ?? "年代待补"),
+      iconLine("mappin.and.ellipse", subtitle),
+      iconLine("doc.text", record.sourceDisplayText)
+    ].joined(separator: "\n")
+
+    favoriteBadge.isHidden = !record.favorite
+    configureBadge(ocrBadge, text: "OCR \(record.ocrDisplayText)", color: record.ocrTintColor)
+    configureBadge(localBadge, text: state == .cloudOnly ? "云端" : "本地", color: state == .cloudOnly ? .systemBlue : UIColor.roamlyGreen)
+    configureBadge(syncBadge, text: record.id.hasPrefix("local-") ? "未同步" : "已同步", color: record.id.hasPrefix("local-") ? .systemRed : UIColor.roamlyGreen)
+
+    let visibleTags = Array(record.tags.prefix(4))
+    for tag in visibleTags {
+      tagStack.addArrangedSubview(makeTagLabel(tag))
+    }
+
+    outlineView.configure(record: record)
+    rangeLabel.text = record.coverageRangeText
   }
 
   func apply(image: UIImage?) {
     imageView.image = image
+  }
+
+  private func iconLine(_ systemName: String, _ text: String) -> String {
+    text
+  }
+
+  private func configureBadge(_ label: UILabel, text: String, color: UIColor) {
+    label.text = " \(text) "
+    label.textColor = color
+    label.backgroundColor = color.withAlphaComponent(0.12)
+  }
+
+  private func makeTagLabel(_ text: String) -> UILabel {
+    let label = UILabel()
+    label.font = .systemFont(ofSize: 10, weight: .semibold)
+    label.textColor = .secondaryLabel
+    label.textAlignment = .center
+    label.text = " \(text) "
+    label.backgroundColor = UIColor.secondarySystemGroupedBackground
+    label.layer.cornerRadius = 6
+    label.layer.cornerCurve = .continuous
+    label.layer.masksToBounds = true
+    label.heightAnchor.constraint(equalToConstant: 24).isActive = true
+    return label
+  }
+}
+
+private final class CoverageOutlineView: UIView {
+  private var points: [CGPoint] = []
+  private var isEstimated = false
+
+  func configure(record: MapRecord) {
+    points = record.outlinePoints
+    isEstimated = !record.hasPreciseCoverageShape
+    setNeedsDisplay()
+  }
+
+  override func draw(_ rect: CGRect) {
+    guard let context = UIGraphicsGetCurrentContext() else { return }
+    let gridColor = UIColor.roamlyHairline.withAlphaComponent(0.42)
+    context.setStrokeColor(gridColor.cgColor)
+    context.setLineWidth(0.5)
+    for i in 1..<4 {
+      let x = rect.minX + rect.width * CGFloat(i) / 4
+      context.move(to: CGPoint(x: x, y: rect.minY))
+      context.addLine(to: CGPoint(x: x, y: rect.maxY))
+      let y = rect.minY + rect.height * CGFloat(i) / 4
+      context.move(to: CGPoint(x: rect.minX, y: y))
+      context.addLine(to: CGPoint(x: rect.maxX, y: y))
+    }
+    context.strokePath()
+
+    let inset = rect.insetBy(dx: 12, dy: 9)
+    guard points.count >= 3 else {
+      drawEstimatedBox(in: inset)
+      return
+    }
+
+    let path = UIBezierPath()
+    let mapped = points.map { CGPoint(x: inset.minX + $0.x * inset.width, y: inset.minY + $0.y * inset.height) }
+    path.move(to: mapped[0])
+    mapped.dropFirst().forEach { path.addLine(to: $0) }
+    path.close()
+
+    UIColor.roamlyOlive.withAlphaComponent(isEstimated ? 0.08 : 0.12).setFill()
+    UIColor.label.withAlphaComponent(isEstimated ? 0.42 : 0.68).setStroke()
+    path.lineWidth = isEstimated ? 1 : 1.2
+    if isEstimated {
+      path.setLineDash([4, 3], count: 2, phase: 0)
+    }
+    path.fill()
+    path.stroke()
+  }
+
+  private func drawEstimatedBox(in rect: CGRect) {
+    let path = UIBezierPath(roundedRect: rect, cornerRadius: 3)
+    path.lineWidth = 1
+    path.setLineDash([4, 3], count: 2, phase: 0)
+    UIColor.secondaryLabel.withAlphaComponent(0.45).setStroke()
+    path.stroke()
+  }
+}
+
+private extension UIColor {
+  static let roamlyCanvas = UIColor(red: 0.95, green: 0.96, blue: 0.93, alpha: 1)
+  static let roamlyOlive = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
+  static let roamlyGreen = UIColor(red: 0.20, green: 0.52, blue: 0.15, alpha: 1)
+  static let roamlyHairline = UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.26)
+}
+
+private extension MapRecord {
+  var needsLibraryWork: Bool {
+    String(yearLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+    [countryName, province, city, district].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.allSatisfy(\.isEmpty) ||
+    String(ocrText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
+  var ocrDisplayText: String {
+    let text = String(ocrText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if !text.isEmpty { return "已完成" }
+    switch String(ocrStatus ?? "").lowercased() {
+    case "complete", "completed": return "已完成"
+    case "partial": return "部分识别"
+    default: return "待识别"
+    }
+  }
+
+  var ocrTintColor: UIColor {
+    switch ocrDisplayText {
+    case "已完成": return UIColor.roamlyGreen
+    case "部分识别": return .systemOrange
+    default: return .systemRed
+    }
+  }
+
+  var sourceDisplayText: String {
+    let candidates = [collectionUnit, source, fileName]
+    return candidates.compactMap { value in
+      let trimmed = String(value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.isEmpty ? nil : trimmed
+    }.first ?? "本地导入"
+  }
+
+  var coverageRangeText: String {
+    guard
+      let westLongitude,
+      let eastLongitude,
+      let southLatitude,
+      let northLatitude
+    else {
+      return "待校准"
+    }
+    return "\(Self.format(westLongitude))-\(Self.format(eastLongitude))E\n\(Self.format(southLatitude))-\(Self.format(northLatitude))N"
+  }
+
+  var hasPreciseCoverageShape: Bool {
+    let text = "\(title) \(countryName ?? "") \(province ?? "")".lowercased()
+    return text.contains("中国") || text.contains("黑龙江") || text.contains("龙江") || text.contains("江西") || text.contains("菲律宾")
+  }
+
+  var outlinePoints: [CGPoint] {
+    let text = "\(title) \(countryName ?? "") \(province ?? "")"
+    if text.contains("菲律宾") {
+      return [
+        CGPoint(x: 0.42, y: 0.05), CGPoint(x: 0.52, y: 0.15), CGPoint(x: 0.47, y: 0.27),
+        CGPoint(x: 0.56, y: 0.38), CGPoint(x: 0.50, y: 0.52), CGPoint(x: 0.62, y: 0.66),
+        CGPoint(x: 0.52, y: 0.86), CGPoint(x: 0.36, y: 0.78), CGPoint(x: 0.30, y: 0.61),
+        CGPoint(x: 0.38, y: 0.43), CGPoint(x: 0.31, y: 0.25)
+      ]
+    }
+    if text.contains("黑龙江") || text.contains("龙江") {
+      return [
+        CGPoint(x: 0.22, y: 0.14), CGPoint(x: 0.52, y: 0.06), CGPoint(x: 0.82, y: 0.24),
+        CGPoint(x: 0.76, y: 0.48), CGPoint(x: 0.58, y: 0.45), CGPoint(x: 0.49, y: 0.70),
+        CGPoint(x: 0.26, y: 0.84), CGPoint(x: 0.13, y: 0.58), CGPoint(x: 0.20, y: 0.36)
+      ]
+    }
+    if text.contains("江西") {
+      return [
+        CGPoint(x: 0.40, y: 0.06), CGPoint(x: 0.68, y: 0.16), CGPoint(x: 0.84, y: 0.43),
+        CGPoint(x: 0.72, y: 0.70), CGPoint(x: 0.52, y: 0.91), CGPoint(x: 0.30, y: 0.80),
+        CGPoint(x: 0.18, y: 0.55), CGPoint(x: 0.25, y: 0.28)
+      ]
+    }
+    if text.contains("上海") {
+      return [
+        CGPoint(x: 0.38, y: 0.16), CGPoint(x: 0.68, y: 0.28), CGPoint(x: 0.58, y: 0.42),
+        CGPoint(x: 0.76, y: 0.54), CGPoint(x: 0.55, y: 0.75), CGPoint(x: 0.30, y: 0.62),
+        CGPoint(x: 0.22, y: 0.36)
+      ]
+    }
+    if text.contains("中国") {
+      return [
+        CGPoint(x: 0.10, y: 0.42), CGPoint(x: 0.25, y: 0.18), CGPoint(x: 0.47, y: 0.16),
+        CGPoint(x: 0.62, y: 0.28), CGPoint(x: 0.83, y: 0.23), CGPoint(x: 0.93, y: 0.43),
+        CGPoint(x: 0.75, y: 0.55), CGPoint(x: 0.65, y: 0.76), CGPoint(x: 0.45, y: 0.82),
+        CGPoint(x: 0.28, y: 0.66), CGPoint(x: 0.14, y: 0.62)
+      ]
+    }
+    return [
+      CGPoint(x: 0.18, y: 0.22), CGPoint(x: 0.82, y: 0.22), CGPoint(x: 0.82, y: 0.78), CGPoint(x: 0.18, y: 0.78)
+    ]
+  }
+
+  private static func format(_ value: Double) -> String {
+    String(format: "%.1f", value)
   }
 }
 

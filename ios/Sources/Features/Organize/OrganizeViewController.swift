@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 
 final class OrganizeViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
@@ -61,6 +62,8 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
   private var lastOCRStatusMessage = "OCR 待命"
   private var lastAIStatusMessage = "AI 编目待命"
   private var manualProgressValue: Float = 0
+  private let previewCache = NSCache<NSString, UIImage>()
+  private var previewLoadTasks: [String: Task<UIImage?, Never>] = [:]
 
   init(container: AppContainer) {
     self.container = container
@@ -73,9 +76,13 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
     fatalError("init(coder:) has not been implemented")
   }
 
+  deinit {
+    previewLoadTasks.values.forEach { $0.cancel() }
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemGroupedBackground
+    view.backgroundColor = UIColor(red: 0.95, green: 0.96, blue: 0.93, alpha: 1)
     navigationItem.largeTitleDisplayMode = .never
     navigationItem.rightBarButtonItem = editButtonItem
     configureLayout()
@@ -118,7 +125,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
 
     filterControl.selectedSegmentIndex = filter.rawValue
     filterControl.apportionsSegmentWidthsByContent = true
-    filterControl.selectedSegmentTintColor = .systemBlue
+    filterControl.selectedSegmentTintColor = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
     filterControl.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)
     filterControl.setTitleTextAttributes([.foregroundColor: UIColor.label, .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
     filterControl.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .selected)
@@ -130,7 +137,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
     progressLabel.textColor = .secondaryLabel
     progressLabel.numberOfLines = 3
     progressLabel.text = "OCR 待命\nAI 编目待命"
-    progressView.progressTintColor = .systemBlue
+    progressView.progressTintColor = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
     progressView.trackTintColor = .separator
     progressView.progress = 0
 
@@ -156,11 +163,11 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
     selectionBlur.translatesAutoresizingMaskIntoConstraints = false
     selectionBar.addSubview(selectionBlur)
     selectionBar.sendSubviewToBack(selectionBlur)
-    selectionBar.backgroundColor = .secondarySystemGroupedBackground.withAlphaComponent(0.8)
-    selectionBar.layer.cornerRadius = 18
+    selectionBar.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.88)
+    selectionBar.layer.cornerRadius = 8
     selectionBar.layer.cornerCurve = .continuous
     selectionBar.layer.borderWidth = 1
-    selectionBar.layer.borderColor = UIColor.separator.cgColor
+    selectionBar.layer.borderColor = UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.26).cgColor
 
     selectionLabel.font = .systemFont(ofSize: 12, weight: .semibold)
     selectionLabel.textColor = .label
@@ -381,7 +388,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
   private func stylePillButton(_ button: UIButton, title: String) {
     var config = UIButton.Configuration.filled()
     config.cornerStyle = .capsule
-    config.baseBackgroundColor = .systemBlue
+    config.baseBackgroundColor = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
     config.baseForegroundColor = .white
     config.title = title
     config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
@@ -389,17 +396,97 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
     button.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
   }
 
+  private func previewCacheKey(for record: MapRecord) -> NSString {
+    NSString(string: record.id)
+  }
+
   private func previewImage(for record: MapRecord) -> UIImage? {
-    let candidates = [
-      container.store.localThumbnailURL(for: record),
-      container.store.localOriginalURL(for: record)
-    ]
-    for url in candidates where FileManager.default.fileExists(atPath: url.path) {
-      if let image = UIImage(contentsOfFile: url.path) {
-        return image
+    previewCache.object(forKey: previewCacheKey(for: record))
+  }
+
+  private func thumbnailURL(for record: MapRecord) -> URL? {
+    let thumbnailURL = container.store.localThumbnailURL(for: record)
+    guard FileManager.default.fileExists(atPath: thumbnailURL.path) else {
+      return nil
+    }
+    return thumbnailURL
+  }
+
+  private func loadPreviewIfNeeded(for record: MapRecord, completion: @escaping (UIImage?) -> Void) {
+    let key = previewCacheKey(for: record)
+    if let cached = previewCache.object(forKey: key) {
+      completion(cached)
+      return
+    }
+
+    if let existingTask = previewLoadTasks[record.id] {
+      Task { completion(await existingTask.value) }
+      return
+    }
+
+    let store = container.store
+    let task: Task<UIImage?, Never> = Task(priority: .utility) { [record] in
+      var resolvedThumbnailURL = self.thumbnailURL(for: record)
+      if resolvedThumbnailURL == nil {
+        _ = store.generateThumbnailIfNeeded(for: record, maxPixelSize: 480)
+        resolvedThumbnailURL = self.thumbnailURL(for: record)
+      }
+
+      guard let thumbnailURL = resolvedThumbnailURL else { return nil }
+      return autoreleasepool {
+        Self.downsampledImage(at: thumbnailURL, maxPixelSize: 220)
       }
     }
-    return nil
+
+    previewLoadTasks[record.id] = task
+    Task { [weak self] in
+      let image = await task.value
+      await MainActor.run {
+        guard let self else { return }
+        if let image {
+          self.previewCache.setObject(image, forKey: key)
+        }
+        self.previewLoadTasks[record.id] = nil
+        completion(image)
+      }
+    }
+  }
+
+  private func requestPreview(for cell: CatalogRecordCell, record: MapRecord, at indexPath: IndexPath) {
+    if let cached = previewImage(for: record) {
+      cell.applyPreviewImage(cached)
+      return
+    }
+
+    loadPreviewIfNeeded(for: record) { [weak self, weak cell] image in
+      guard
+        let self,
+        let cell,
+        cell.representedRecordID == record.id,
+        let visibleIndexPath = self.tableView.indexPath(for: cell),
+        visibleIndexPath == indexPath
+      else {
+        return
+      }
+      cell.applyPreviewImage(image)
+    }
+  }
+
+  nonisolated private static func downsampledImage(at url: URL, maxPixelSize: CGFloat) -> UIImage? {
+    let options = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, options) else { return nil }
+
+    let downsampleOptions = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceShouldCacheImmediately: false,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceThumbnailMaxPixelSize: max(Int(maxPixelSize.rounded()), 1)
+    ] as CFDictionary
+
+    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else {
+      return nil
+    }
+    return UIImage(cgImage: cgImage)
   }
 
   private func openDetail(for record: MapRecord) {
@@ -590,6 +677,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
           teachingUse: record.teachingUse ?? "",
           teachingNote: record.teachingNote ?? "",
           securityLevel: record.securityLevel ?? "",
+          countryCode: record.countryCode,
           countryName: record.countryName ?? "",
           province: record.province ?? "",
           city: record.city ?? "",
@@ -612,11 +700,24 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
 
   private func startBatchRegionFlow() {
     batchRegionDraft = BatchRegionDraft()
-    let controller = makeCountryController()
+    let controller = RegionPickerSheetViewController(
+      title: "批量地区",
+      regionCatalog: container.regionCatalog,
+      selection: RegionSelection(country: "", province: "", city: "", district: ""),
+      startingLevel: .country
+    ) { [weak self] selection in
+      guard let self else { return }
+      self.batchRegionDraft.country = selection.country
+      self.batchRegionDraft.province = selection.province
+      self.batchRegionDraft.city = selection.city
+      self.batchRegionDraft.district = selection.district
+      self.confirmBatchRegionUpdate()
+    }
     let navigationController = UINavigationController(rootViewController: controller)
     if let sheet = navigationController.sheetPresentationController {
       sheet.detents = [.medium(), .large()]
       sheet.prefersGrabberVisible = true
+      sheet.preferredCornerRadius = 28
     }
     batchRegionNavigationController = navigationController
     present(navigationController, animated: true)
@@ -785,7 +886,10 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
       guard let self else { return }
       self.batchRegionNavigationController?.dismiss(animated: true) {
         self.applyBatchUpdate(title: "地区已更新") { record in
-          record.withEditableMetadata(
+          let resolvedCountryCode = self.batchRegionDraft.country.isEmpty
+            ? record.countryCode
+            : self.container.regionCatalog.resolveCountryCode(for: self.batchRegionDraft.country)
+          return record.withEditableMetadata(
             title: record.title,
             description: record.description,
             yearLabel: record.yearLabel ?? "",
@@ -793,6 +897,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
             teachingUse: record.teachingUse ?? "",
             teachingNote: record.teachingNote ?? "",
             securityLevel: record.securityLevel ?? "",
+            countryCode: resolvedCountryCode,
             countryName: self.batchRegionDraft.country.isEmpty ? (record.countryName ?? "") : self.batchRegionDraft.country,
             province: self.batchRegionDraft.province.isEmpty ? (record.province ?? "") : self.batchRegionDraft.province,
             city: self.batchRegionDraft.city.isEmpty ? (record.city ?? "") : self.batchRegionDraft.city,
@@ -897,6 +1002,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
       selected: selectedIDs.contains(record.id),
       editing: isEditing
     )
+    requestPreview(for: cell, record: record, at: indexPath)
     return cell
   }
 
@@ -934,6 +1040,7 @@ private final class CatalogRecordCell: UITableViewCell {
   private let subtitleLabel = UILabel()
   private let badgeStack = UIStackView()
   private let previewImageView = UIImageView()
+  fileprivate private(set) var representedRecordID: String?
 
   override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
     super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -950,12 +1057,11 @@ private final class CatalogRecordCell: UITableViewCell {
     card.addSubview(badgeStack)
     card.addSubview(previewImageView)
 
-    card.backgroundColor = .white
-    card.backgroundColor = .secondarySystemGroupedBackground
-    card.layer.cornerRadius = 16
+    card.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+    card.layer.cornerRadius = 8
     card.layer.cornerCurve = .continuous
     card.layer.borderWidth = 1
-    card.layer.borderColor = UIColor.separator.cgColor
+    card.layer.borderColor = UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.26).cgColor
 
     titleLabel.font = .systemFont(ofSize: 14, weight: .bold)
     titleLabel.textColor = .label
@@ -968,7 +1074,7 @@ private final class CatalogRecordCell: UITableViewCell {
     badgeStack.spacing = 5
 
     previewImageView.contentMode = .scaleAspectFill
-    previewImageView.layer.cornerRadius = 10
+    previewImageView.layer.cornerRadius = 7
     previewImageView.layer.cornerCurve = .continuous
     previewImageView.clipsToBounds = true
     previewImageView.backgroundColor = .tertiarySystemGroupedBackground
@@ -1006,7 +1112,14 @@ private final class CatalogRecordCell: UITableViewCell {
     fatalError("init(coder:) has not been implemented")
   }
 
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    representedRecordID = nil
+    previewImageView.image = UIImage(systemName: "map")
+  }
+
   func configure(record: MapRecord, previewImage: UIImage?, selected: Bool, editing: Bool) {
+    representedRecordID = record.id
     titleLabel.text = record.title
     let area = [record.countryName, record.province, record.city, record.district]
       .compactMap { $0 }
@@ -1017,7 +1130,7 @@ private final class CatalogRecordCell: UITableViewCell {
       area.isEmpty ? "未标地区" : area,
       year
     ].joined(separator: " · ")
-    previewImageView.image = previewImage ?? UIImage(systemName: "map")
+    applyPreviewImage(previewImage)
 
     badgeStack.arrangedSubviews.forEach {
       badgeStack.removeArrangedSubview($0)
@@ -1054,10 +1167,15 @@ private final class CatalogRecordCell: UITableViewCell {
     accessoryType = editing ? .none : .disclosureIndicator
   }
 
+  func applyPreviewImage(_ image: UIImage?) {
+    previewImageView.image = image ?? UIImage(systemName: "map")
+  }
+
   func setBatchSelected(_ selected: Bool) {
-    card.layer.borderColor = (selected ? UIColor.systemBlue : UIColor.separator).cgColor
+    let olive = UIColor(red: 0.33, green: 0.38, blue: 0.24, alpha: 1)
+    card.layer.borderColor = (selected ? olive : UIColor(red: 0.50, green: 0.52, blue: 0.44, alpha: 0.26)).cgColor
     card.layer.borderWidth = selected ? 2 : 1
-    card.backgroundColor = selected ? UIColor.systemBlue.withAlphaComponent(0.12) : .secondarySystemGroupedBackground
+    card.backgroundColor = selected ? olive.withAlphaComponent(0.12) : UIColor.systemBackground.withAlphaComponent(0.92)
   }
 
   private func makeBadge(text: String, color: UIColor) -> UILabel {
