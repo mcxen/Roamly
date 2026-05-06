@@ -3,7 +3,12 @@ import UIKit
 import UniformTypeIdentifiers
 import ImageIO
 
-final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UISearchResultsUpdating, PHPickerViewControllerDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching {
+final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, PHPickerViewControllerDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching {
+  private enum LibraryLayoutMode: Equatable {
+    case list
+    case square
+  }
+
   private enum LibraryFilter: Int, CaseIterable {
     case all
     case local
@@ -54,17 +59,22 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   private var allRecords: [MapRecord] = []
   private var visibleRecords: [MapRecord] = []
   private var activeFilter: LibraryFilter = .all
+  private var layoutMode: LibraryLayoutMode = .list
+  private var activeRegionFilter: String?
 
   private let headerStack = UIStackView()
+  private let searchBarView = UIView()
+  private let searchField = UITextField()
   private let filterStack = UIStackView()
   private let summaryRow = UIStackView()
   private let countLabel = UILabel()
   private let sortLabel = UILabel()
   private let syncBadge = UILabel()
+  private let regionButton = UIButton(type: .system)
+  private let layoutModeButton = UIButton(type: .system)
   private var filterButtons: [UIButton] = []
   private let collectionView: UICollectionView
   private let imageCache = NSCache<NSString, UIImage>()
-  private let searchController = UISearchController(searchResultsController: nil)
   private let emptyLabel = UILabel()
   private var pendingRestoreOffset: CGPoint?
   private var pendingRestoreRecordID: String?
@@ -103,7 +113,6 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     let importItem = UIBarButtonItem(image: UIImage(systemName: "plus.circle.fill"), style: .plain, target: self, action: #selector(importImages))
     importItem.accessibilityLabel = "导入图片"
     navigationItem.rightBarButtonItem = importItem
-    configureSearch()
     configureHeader()
     configureCollectionView()
     configureEmptyState()
@@ -143,24 +152,52 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     }
   }
 
-  private func configureSearch() {
-    searchController.obscuresBackgroundDuringPresentation = false
-    searchController.searchResultsUpdater = self
-    searchController.searchBar.placeholder = "搜索地图名称、地区、年代、来源、标签..."
-    searchController.searchBar.searchBarStyle = .minimal
-    navigationItem.searchController = searchController
-    navigationItem.hidesSearchBarWhenScrolling = false
-    definesPresentationContext = true
-  }
-
   private func configureHeader() {
-    [headerStack, filterStack, summaryRow, countLabel, sortLabel, syncBadge].forEach {
+    [headerStack, searchBarView, searchField, filterStack, summaryRow, countLabel, sortLabel, syncBadge, regionButton, layoutModeButton].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
     }
 
     headerStack.axis = .vertical
-    headerStack.spacing = 12
+    headerStack.spacing = 10
     view.addSubview(headerStack)
+
+    searchBarView.backgroundColor = .systemBackground
+    searchBarView.layer.cornerRadius = 16
+    searchBarView.layer.cornerCurve = .continuous
+    searchBarView.layer.borderWidth = 1
+    searchBarView.layer.borderColor = UIColor.roamlyHairline.cgColor
+    searchBarView.heightAnchor.constraint(equalToConstant: 46).isActive = true
+
+    let searchIcon = UIImageView(image: UIImage(systemName: "magnifyingglass"))
+    searchIcon.translatesAutoresizingMaskIntoConstraints = false
+    searchIcon.tintColor = .secondaryLabel
+    searchIcon.contentMode = .scaleAspectFit
+    searchBarView.addSubview(searchIcon)
+    searchBarView.addSubview(searchField)
+
+    searchField.font = .systemFont(ofSize: 15, weight: .semibold)
+    searchField.textColor = .label
+    searchField.tintColor = UIColor.roamlyOlive
+    searchField.attributedPlaceholder = NSAttributedString(
+      string: "搜索地图名称、地区、年代、来源、标签...",
+      attributes: [.foregroundColor: UIColor.secondaryLabel]
+    )
+    searchField.backgroundColor = .clear
+    searchField.borderStyle = .none
+    searchField.clearButtonMode = .whileEditing
+    searchField.returnKeyType = .search
+    searchField.addTarget(self, action: #selector(searchTextChanged), for: .editingChanged)
+
+    NSLayoutConstraint.activate([
+      searchIcon.leadingAnchor.constraint(equalTo: searchBarView.leadingAnchor, constant: 14),
+      searchIcon.centerYAnchor.constraint(equalTo: searchBarView.centerYAnchor),
+      searchIcon.widthAnchor.constraint(equalToConstant: 18),
+      searchIcon.heightAnchor.constraint(equalToConstant: 18),
+      searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 10),
+      searchField.trailingAnchor.constraint(equalTo: searchBarView.trailingAnchor, constant: -12),
+      searchField.topAnchor.constraint(equalTo: searchBarView.topAnchor),
+      searchField.bottomAnchor.constraint(equalTo: searchBarView.bottomAnchor)
+    ])
 
     filterStack.axis = .horizontal
     filterStack.spacing = 8
@@ -191,17 +228,42 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     syncBadge.layer.borderWidth = 1
     syncBadge.layer.borderColor = UIColor.roamlyHairline.cgColor
 
+    configureHeaderButton(regionButton, title: "地区", symbol: "mappin.and.ellipse")
+    regionButton.addTarget(self, action: #selector(showRegionFilter), for: .touchUpInside)
+    configureHeaderButton(layoutModeButton, title: "平铺", symbol: "square.grid.2x2")
+    layoutModeButton.addTarget(self, action: #selector(toggleLayoutMode), for: .touchUpInside)
+
     summaryRow.axis = .horizontal
     summaryRow.alignment = .center
     summaryRow.spacing = 10
     summaryRow.addArrangedSubview(countLabel)
     summaryRow.addArrangedSubview(UIView())
-    summaryRow.addArrangedSubview(syncBadge)
-    summaryRow.addArrangedSubview(sortLabel)
+    summaryRow.addArrangedSubview(regionButton)
+    summaryRow.addArrangedSubview(layoutModeButton)
 
+    headerStack.addArrangedSubview(searchBarView)
     headerStack.addArrangedSubview(filterStack)
     headerStack.addArrangedSubview(summaryRow)
     refreshFilterButtons()
+    refreshRegionButton()
+    refreshLayoutModeButton()
+  }
+
+  private func configureHeaderButton(_ button: UIButton, title: String, symbol: String) {
+    var config = UIButton.Configuration.filled()
+    config.image = UIImage(systemName: symbol)
+    config.title = title
+    config.imagePadding = 4
+    config.cornerStyle = .capsule
+    config.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 10, bottom: 7, trailing: 10)
+    config.baseBackgroundColor = UIColor.systemBackground
+    config.baseForegroundColor = .label
+    button.configuration = config
+    button.layer.cornerRadius = 15
+    button.layer.cornerCurve = .continuous
+    button.layer.borderWidth = 1
+    button.layer.borderColor = UIColor.roamlyHairline.cgColor
+    button.heightAnchor.constraint(equalToConstant: 30).isActive = true
   }
 
   private func configureCollectionView() {
@@ -213,6 +275,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     collectionView.delegate = self
     collectionView.prefetchDataSource = self
     collectionView.register(MapGridCell.self, forCellWithReuseIdentifier: "MapGridCell")
+    collectionView.register(SquareMapCell.self, forCellWithReuseIdentifier: "SquareMapCell")
     view.addSubview(collectionView)
 
     NSLayoutConstraint.activate([
@@ -252,23 +315,27 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   }
 
   private func applySearch() {
-    let query = String(searchController.searchBar.text ?? "")
+    let query = String(searchField.text ?? "")
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .lowercased()
 
     let filtered = allRecords.filter { record in
+      let filterMatches: Bool
       switch activeFilter {
       case .all:
-        return true
+        filterMatches = true
       case .local:
-        return container.store.hasLocalOriginal(for: record) || container.store.hasLocalThumbnail(for: record)
+        filterMatches = container.store.hasLocalOriginal(for: record) || container.store.hasLocalThumbnail(for: record)
       case .cloud:
-        return !container.store.hasLocalOriginal(for: record)
+        filterMatches = !container.store.hasLocalOriginal(for: record)
       case .needsWork:
-        return record.needsLibraryWork
+        filterMatches = record.needsLibraryWork
       case .favorite:
-        return record.favorite
+        filterMatches = record.favorite
       }
+      guard filterMatches else { return false }
+      guard let activeRegionFilter else { return true }
+      return record.regionTokens.contains(activeRegionFilter)
     }
 
     visibleRecords = query.isEmpty ? filtered : filtered.filter { $0.searchableText.contains(query) }
@@ -284,10 +351,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     let local = allRecords.filter { container.store.hasLocalOriginal(for: $0) || container.store.hasLocalThumbnail(for: $0) }.count
     let synced = allRecords.filter { !$0.id.hasPrefix("local-") || $0.source == "local-seed" }.count
     syncBadge.text = "  同步 \(min(synced, allRecords.count))/\(max(allRecords.count, 1))  "
-    if activeFilter != .all || !(searchController.searchBar.text ?? "").isEmpty {
+    if activeFilter != .all || activeRegionFilter != nil || !(searchField.text ?? "").isEmpty {
       countLabel.text = "显示 \(visibleRecords.count) / \(allRecords.count) 张，本地 \(local)"
     }
     refreshFilterButtons()
+    refreshRegionButton()
+    refreshLayoutModeButton()
   }
 
   private func refreshFilterButtons() {
@@ -435,6 +504,115 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     applySearch()
   }
 
+  @objc private func searchTextChanged() {
+    applySearch()
+  }
+
+  @objc private func toggleLayoutMode() {
+    container.haptics.selectionChanged()
+    layoutMode = layoutMode == .list ? .square : .list
+    updateCollectionLayoutForMode()
+    refreshLayoutModeButton()
+    collectionView.reloadData()
+  }
+
+  private func updateCollectionLayoutForMode() {
+    guard let layout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout else { return }
+    switch layoutMode {
+    case .list:
+      layout.minimumInteritemSpacing = 0
+      layout.minimumLineSpacing = 12
+      layout.sectionInset = UIEdgeInsets(top: 10, left: 14, bottom: 120, right: 14)
+    case .square:
+      layout.minimumInteritemSpacing = 10
+      layout.minimumLineSpacing = 10
+      layout.sectionInset = UIEdgeInsets(top: 10, left: 14, bottom: 120, right: 14)
+    }
+    lastResolvedLayoutWidth = 0
+    layout.invalidateLayout()
+  }
+
+  private func refreshLayoutModeButton() {
+    var config = layoutModeButton.configuration ?? UIButton.Configuration.filled()
+    config.title = layoutMode == .list ? "平铺" : "列表"
+    config.image = UIImage(systemName: layoutMode == .list ? "square.grid.2x2" : "list.bullet")
+    layoutModeButton.configuration = config
+  }
+
+  @objc private func showRegionFilter() {
+    let alert = UIAlertController(title: "地区筛选", message: nil, preferredStyle: .actionSheet)
+    alert.addAction(UIAlertAction(title: "全部地区", style: .default) { [weak self] _ in
+      self?.setRegionFilter(nil)
+    })
+
+    let countries = orderedRegionValues { $0.countryName }
+    if !countries.isEmpty {
+      alert.addAction(UIAlertAction(title: "按国家/地区", style: .default) { [weak self] _ in
+        self?.showRegionOptions(title: "国家/地区", values: countries)
+      })
+    }
+
+    let provinces = orderedRegionValues { $0.province }
+    if !provinces.isEmpty {
+      alert.addAction(UIAlertAction(title: "按省/州", style: .default) { [weak self] _ in
+        self?.showRegionOptions(title: "省/州", values: provinces)
+      })
+    }
+
+    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+    if let popover = alert.popoverPresentationController {
+      popover.sourceView = regionButton
+      popover.sourceRect = regionButton.bounds
+    }
+    present(alert, animated: true)
+  }
+
+  private func showRegionOptions(title: String, values: [String]) {
+    let alert = UIAlertController(title: title, message: nil, preferredStyle: .actionSheet)
+    values.prefix(18).forEach { value in
+      alert.addAction(UIAlertAction(title: value, style: .default) { [weak self] _ in
+        self?.setRegionFilter(value)
+      })
+    }
+    if values.count > 18 {
+      alert.message = "仅显示当前图库中数量最多的 18 个地区"
+    }
+    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+    if let popover = alert.popoverPresentationController {
+      popover.sourceView = regionButton
+      popover.sourceRect = regionButton.bounds
+    }
+    present(alert, animated: true)
+  }
+
+  private func setRegionFilter(_ value: String?) {
+    container.haptics.selectionChanged()
+    activeRegionFilter = value
+    applySearch()
+  }
+
+  private func refreshRegionButton() {
+    var config = regionButton.configuration ?? UIButton.Configuration.filled()
+    config.title = activeRegionFilter ?? "地区"
+    config.baseBackgroundColor = activeRegionFilter == nil ? UIColor.systemBackground : UIColor.roamlyOlive
+    config.baseForegroundColor = activeRegionFilter == nil ? .label : .white
+    regionButton.configuration = config
+  }
+
+  private func orderedRegionValues(_ keyPath: (MapRecord) -> String?) -> [String] {
+    let counts = Dictionary(grouping: allRecords.compactMap { record -> String? in
+      let value = keyPath(record)?.trimmingCharacters(in: .whitespacesAndNewlines)
+      return value?.isEmpty == false ? value : nil
+    }, by: { $0 }).mapValues(\.count)
+
+    return counts.keys.sorted {
+      let lhsCount = counts[$0] ?? 0
+      let rhsCount = counts[$1] ?? 0
+      if lhsCount != rhsCount { return lhsCount > rhsCount }
+      return $0.localizedStandardCompare($1) == .orderedAscending
+    }
+  }
+
   func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
     dismiss(animated: true)
     guard !results.isEmpty else { return }
@@ -492,20 +670,34 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     }
   }
 
-  func updateSearchResults(for searchController: UISearchController) {
-    applySearch()
-  }
-
   func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
     visibleRecords.count
   }
 
   func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+    let record = visibleRecords[indexPath.item]
+    let size = resolvedGridLayout(for: collectionView.bounds.width)
+    if layoutMode == .square {
+      guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "SquareMapCell", for: indexPath) as? SquareMapCell else {
+        return UICollectionViewCell()
+      }
+      cell.configure(record: record, state: assetState(for: record))
+      cell.apply(image: previewImage(for: record, targetSize: CGSize(width: size.width, height: size.imageHeight)))
+      loadImageIfNeeded(for: record, targetSize: CGSize(width: size.width, height: size.imageHeight)) { [weak self, weak cell] image in
+        guard
+          let self,
+          let cell,
+          cell.representedRecordID == record.id,
+          self.collectionView.indexPath(for: cell) == indexPath
+        else { return }
+        cell.apply(image: image)
+      }
+      return cell
+    }
+
     guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "MapGridCell", for: indexPath) as? MapGridCell else {
       return UICollectionViewCell()
     }
-    let record = visibleRecords[indexPath.item]
-    let size = resolvedGridLayout(for: collectionView.bounds.width)
     cell.configure(
       record: record,
       state: assetState(for: record),
@@ -513,6 +705,9 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
       imageHeight: size.imageHeight,
       showMetadata: container.settings.showTitlesOnLibrary
     )
+    cell.onMoreTapped = { [weak self] sourceView in
+      self?.showRecordActions(for: record, sourceView: sourceView)
+    }
     cell.apply(image: previewImage(for: record, targetSize: CGSize(width: 120, height: size.imageHeight)))
     requestImage(for: cell, record: record, at: indexPath)
     return cell
@@ -532,6 +727,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   private func resolvedGridLayout(for availableWidth: CGFloat) -> (width: CGFloat, imageHeight: CGFloat, itemHeight: CGFloat) {
     let layout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout
     let sectionInset = layout?.sectionInset ?? .zero
+    if layoutMode == .square {
+      let columns: CGFloat = traitCollection.userInterfaceIdiom == .pad ? 4 : 2
+      let spacing = layout?.minimumInteritemSpacing ?? 10
+      let itemWidth = floor((availableWidth - sectionInset.left - sectionInset.right - spacing * (columns - 1)) / columns)
+      return (itemWidth, itemWidth, itemWidth + 68)
+    }
     let itemWidth = floor(availableWidth - sectionInset.left - sectionInset.right)
     let isPad = traitCollection.userInterfaceIdiom == .pad
     let itemHeight: CGFloat = isPad ? 238 : 180
@@ -612,7 +813,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   }
 
   private func confirmDelete(record: MapRecord) {
-    let alert = UIAlertController(title: "删除地图", message: "将删除这张地图的本地记录、缩略图和原图。", preferredStyle: .actionSheet)
+    let alert = UIAlertController(title: record.title, message: nil, preferredStyle: .actionSheet)
     alert.addAction(UIAlertAction(title: "编辑", style: .default) { [weak self] _ in
       self?.openDetail(for: record)
     })
@@ -623,6 +824,23 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     if let popover = alert.popoverPresentationController {
       popover.sourceView = view
       popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+    }
+    present(alert, animated: true)
+  }
+
+  private func showRecordActions(for record: MapRecord, sourceView: UIView) {
+    container.haptics.selectionChanged()
+    let alert = UIAlertController(title: record.title, message: nil, preferredStyle: .actionSheet)
+    alert.addAction(UIAlertAction(title: "编辑信息", style: .default) { [weak self] _ in
+      self?.openDetail(for: record)
+    })
+    alert.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
+      self?.delete(record: record)
+    })
+    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+    if let popover = alert.popoverPresentationController {
+      popover.sourceView = sourceView
+      popover.sourceRect = sourceView.bounds
     }
     present(alert, animated: true)
   }
@@ -759,6 +977,7 @@ private final class MapGridCell: UICollectionViewCell {
   private var imageHeightConstraint: NSLayoutConstraint?
   private var imageWidthConstraint: NSLayoutConstraint?
   fileprivate private(set) var representedRecordID: String?
+  var onMoreTapped: ((UIView) -> Void)?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -857,7 +1076,7 @@ private final class MapGridCell: UICollectionViewCell {
     moreConfig.image = UIImage(systemName: "ellipsis")
     moreConfig.baseForegroundColor = .label
     moreButton.configuration = moreConfig
-    moreButton.isUserInteractionEnabled = false
+    moreButton.addTarget(self, action: #selector(moreTapped), for: .touchUpInside)
 
     NSLayoutConstraint.activate([
       imageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
@@ -904,6 +1123,7 @@ private final class MapGridCell: UICollectionViewCell {
   override func prepareForReuse() {
     super.prepareForReuse()
     representedRecordID = nil
+    onMoreTapped = nil
     imageView.image = nil
     tagStack.arrangedSubviews.forEach {
       tagStack.removeArrangedSubview($0)
@@ -962,6 +1182,105 @@ private final class MapGridCell: UICollectionViewCell {
     label.layer.masksToBounds = true
     label.heightAnchor.constraint(equalToConstant: 24).isActive = true
     return label
+  }
+
+  @objc private func moreTapped() {
+    onMoreTapped?(moreButton)
+  }
+}
+
+private final class SquareMapCell: UICollectionViewCell {
+  private let imageView = UIImageView()
+  private let titleLabel = UILabel()
+  private let subtitleLabel = UILabel()
+  private let stateBadge = UILabel()
+  fileprivate private(set) var representedRecordID: String?
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    contentView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.94)
+    contentView.layer.cornerRadius = 8
+    contentView.layer.cornerCurve = .continuous
+    contentView.layer.borderWidth = 1
+    contentView.layer.borderColor = UIColor.roamlyHairline.cgColor
+    contentView.clipsToBounds = true
+
+    [imageView, titleLabel, subtitleLabel, stateBadge].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      contentView.addSubview($0)
+    }
+
+    imageView.contentMode = .scaleAspectFill
+    imageView.clipsToBounds = true
+    imageView.backgroundColor = .secondarySystemFill
+
+    titleLabel.font = .systemFont(ofSize: 13, weight: .bold)
+    titleLabel.textColor = .label
+    titleLabel.numberOfLines = 1
+    titleLabel.lineBreakMode = .byTruncatingTail
+
+    subtitleLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+    subtitleLabel.textColor = .secondaryLabel
+    subtitleLabel.numberOfLines = 1
+    subtitleLabel.lineBreakMode = .byTruncatingTail
+
+    stateBadge.font = .systemFont(ofSize: 9, weight: .bold)
+    stateBadge.textAlignment = .center
+    stateBadge.layer.cornerRadius = 6
+    stateBadge.layer.cornerCurve = .continuous
+    stateBadge.clipsToBounds = true
+
+    NSLayoutConstraint.activate([
+      imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+      imageView.heightAnchor.constraint(equalTo: contentView.widthAnchor),
+
+      stateBadge.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+      stateBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
+      stateBadge.heightAnchor.constraint(equalToConstant: 22),
+
+      titleLabel.topAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 8),
+      titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
+      titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+
+      subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
+      subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+      subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+      subtitleLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -8)
+    ])
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    representedRecordID = nil
+    imageView.image = nil
+  }
+
+  func configure(record: MapRecord, state: LibraryViewController.AssetState) {
+    representedRecordID = record.id
+    titleLabel.text = record.title
+    subtitleLabel.text = record.shortRegionText
+    let isCloudOnly: Bool
+    switch state {
+    case .cloudOnly:
+      isCloudOnly = true
+    case .localOriginal, .localThumbnail:
+      isCloudOnly = false
+    }
+    stateBadge.text = isCloudOnly ? " 云端 " : " 本地 "
+    let color = isCloudOnly ? UIColor.systemBlue : UIColor.roamlyGreen
+    stateBadge.textColor = color
+    stateBadge.backgroundColor = color.withAlphaComponent(0.14)
+  }
+
+  func apply(image: UIImage?) {
+    imageView.image = image
   }
 }
 
@@ -1061,6 +1380,19 @@ private extension MapRecord {
     }.first ?? "本地导入"
   }
 
+  var regionTokens: [String] {
+    [countryName, province, city, district].compactMap { value in
+      let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed?.isEmpty == false ? trimmed : nil
+    }
+  }
+
+  var shortRegionText: String {
+    let region = regionTokens.prefix(2).joined(separator: " · ")
+    if !region.isEmpty { return region }
+    return yearLabel?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? yearLabel! : sourceDisplayText
+  }
+
   var coverageRangeText: String {
     guard
       let westLongitude,
@@ -1074,11 +1406,22 @@ private extension MapRecord {
   }
 
   var hasPreciseCoverageShape: Bool {
+    if coverageOutline?.count ?? 0 >= 3 {
+      return true
+    }
     let text = "\(title) \(countryName ?? "") \(province ?? "")".lowercased()
     return text.contains("中国") || text.contains("黑龙江") || text.contains("龙江") || text.contains("江西") || text.contains("菲律宾")
   }
 
   var outlinePoints: [CGPoint] {
+    if let coverageOutline, coverageOutline.count >= 3 {
+      return coverageOutline.map { point in
+        CGPoint(
+          x: min(max(point.x, 0), 1),
+          y: min(max(point.y, 0), 1)
+        )
+      }
+    }
     let text = "\(title) \(countryName ?? "") \(province ?? "")"
     if text.contains("菲律宾") {
       return [

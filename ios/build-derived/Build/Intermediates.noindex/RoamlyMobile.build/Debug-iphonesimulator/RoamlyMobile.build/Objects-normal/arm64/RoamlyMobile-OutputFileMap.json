@@ -1,0 +1,229 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RoamlyMobile-primary.dia",
+    "emit-module-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RoamlyMobile-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RoamlyMobile-primary-emit-module.dia",
+    "pch" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RoamlyMobile-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RoamlyMobile-primary.swiftdeps"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/App/AppDelegate.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/App/RootTabBarController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RootTabBarController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/App/SceneDelegate.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SceneDelegate~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Backup/BackupViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Detail/MapDetailViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapDetailViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Library/LibraryViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LibraryViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/MapWorkbench/MapWorkbenchViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapWorkbenchViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Organize/OrganizeViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OrganizeViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Settings/SettingsViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SettingsViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Shared/RegionPickerSheetViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionPickerSheetViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Shared/SelectionListViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SelectionListViewController~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Models/MapRecord.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/MapRecord~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/AIMetadataService.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/APIClient.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/AppContainer.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/AppSettings.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/Haptics.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/Haptics~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/LocalLibraryStore.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/LocalLibraryStore~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/OCRIndexService.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/OCRIndexService~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/RegionCatalog.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/RegionCatalog~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/SyncService.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/SyncService~partial.swiftmodule"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

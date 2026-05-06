@@ -273,6 +273,16 @@ const parseTagsValue = (tagsValue) => {
   return [];
 };
 
+const parseJsonValue = (value, fallbackValue = null) => {
+  if (!value) return fallbackValue;
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (_err) {
+    return fallbackValue;
+  }
+};
+
 const toRowFromProjectMeta = ({
   id,
   filePath,
@@ -316,6 +326,11 @@ const toRowFromProjectMeta = ({
     district: persistedMeta?.district || inferred.district,
     latitude: persistedMeta?.latitude ?? inferred.latitude,
     longitude: persistedMeta?.longitude ?? inferred.longitude,
+    north_latitude: persistedMeta?.north_latitude ?? null,
+    south_latitude: persistedMeta?.south_latitude ?? null,
+    east_longitude: persistedMeta?.east_longitude ?? null,
+    west_longitude: persistedMeta?.west_longitude ?? null,
+    coverage_outline: persistedMeta?.coverage_outline ? JSON.stringify(persistedMeta.coverage_outline) : null,
     year_label: persistedMeta?.year_label || null,
     mime: mimeType,
     width,
@@ -349,6 +364,11 @@ const rowToProjectMeta = (row) => ({
   district: row.district || null,
   latitude: row.latitude ?? null,
   longitude: row.longitude ?? null,
+  north_latitude: row.north_latitude ?? null,
+  south_latitude: row.south_latitude ?? null,
+  east_longitude: row.east_longitude ?? null,
+  west_longitude: row.west_longitude ?? null,
+  coverage_outline: parseJsonValue(row.coverage_outline, null),
   year_label: row.year_label || null,
   favorite: Boolean(row.favorite),
   ocr_text: row.ocr_text || null,

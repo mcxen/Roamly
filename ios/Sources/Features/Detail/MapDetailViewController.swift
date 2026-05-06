@@ -1,8 +1,9 @@
 import UIKit
 import Vision
 import ImageIO
+import MapKit
 
-final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UITextFieldDelegate, UITextViewDelegate {
+final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UITextFieldDelegate, UITextViewDelegate, MKMapViewDelegate, UIGestureRecognizerDelegate {
   private let minimalDetailMode = false
   private let container: AppContainer
   private var record: MapRecord
@@ -17,6 +18,7 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
   private let floatingActionRow = UIStackView()
   private let infoButton = UIButton(type: .system)
   private let infoPanel = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+  private let panelGrabberHitArea = UIView()
   private let panelGrabber = UIView()
   private let statusCard = UIView()
   private let metadataCard = UIView()
@@ -37,6 +39,13 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
   private let descriptionView = UITextView()
   private let teachingNoteView = UITextView()
   private let ocrLabel = UILabel()
+  private let coverageMapView = MKMapView()
+  private let coverageSummaryLabel = UILabel()
+  private let useMapRegionButton = UIButton(type: .system)
+  private let aiCoverageButton = UIButton(type: .system)
+  private let outlineEditorView = CoverageOutlineEditorView()
+  private let undoOutlineButton = UIButton(type: .system)
+  private let clearOutlineButton = UIButton(type: .system)
   private var panelHeightConstraint: NSLayoutConstraint?
   private var panelWidthConstraint: NSLayoutConstraint?
   private var selectedCountryName = ""
@@ -44,7 +53,9 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
   private var selectedCityName = ""
   private var selectedDistrictName = ""
   private var isInfoPanelPresented = false
+  private var isInfoPanelExpanded = false
   private var panelPanStartTransform: CGAffineTransform = .identity
+  private weak var infoPanelPanGesture: UIPanGestureRecognizer?
   private var previousStandardAppearance: UINavigationBarAppearance?
   private var previousScrollEdgeAppearance: UINavigationBarAppearance?
   private var previousCompactAppearance: UINavigationBarAppearance?
@@ -52,6 +63,8 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
   private var imageLoadTask: Task<Void, Never>?
   private var currentImageRequestID = UUID()
   private var lastLayoutBounds: CGSize = .zero
+  private var draftCoverageBounds: (north: Double, south: Double, east: Double, west: Double)?
+  private var draftOutlinePoints: [MapCoveragePoint] = []
 
   init(container: AppContainer, record: MapRecord, onSave: @escaping (MapRecord) -> Void) {
     self.container = container
@@ -103,6 +116,7 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     ocrCard.translatesAutoresizingMaskIntoConstraints = false
     infoButton.translatesAutoresizingMaskIntoConstraints = false
     infoPanel.translatesAutoresizingMaskIntoConstraints = false
+    panelGrabberHitArea.translatesAutoresizingMaskIntoConstraints = false
     panelGrabber.translatesAutoresizingMaskIntoConstraints = false
     assetStatusLabel.translatesAutoresizingMaskIntoConstraints = false
     imageActionButton.translatesAutoresizingMaskIntoConstraints = false
@@ -154,7 +168,8 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     view.addSubview(floatingActionRow)
     view.addSubview(infoPanel)
     view.addSubview(infoButton)
-    infoPanel.contentView.addSubview(panelGrabber)
+    infoPanel.contentView.addSubview(panelGrabberHitArea)
+    panelGrabberHitArea.addSubview(panelGrabber)
     infoPanel.contentView.addSubview(scrollView)
     scrollView.addSubview(stackView)
 
@@ -204,11 +219,15 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     infoPanel.layer.borderWidth = 1
     infoPanel.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
 
+    panelGrabberHitArea.isUserInteractionEnabled = true
+    panelGrabberHitArea.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(toggleInformationPanelExpanded)))
     panelGrabber.backgroundColor = UIColor.tertiaryLabel.withAlphaComponent(0.6)
     panelGrabber.layer.cornerRadius = 2.5
     panelGrabber.layer.cornerCurve = .continuous
 
     let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleInfoPanelPan(_:)))
+    panGesture.delegate = self
+    infoPanelPanGesture = panGesture
     infoPanel.addGestureRecognizer(panGesture)
 
     [titleField, yearField, campaignField, teachingUseField, securityLevelField, tagsField].forEach { field in
@@ -248,6 +267,8 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     ocrLabel.numberOfLines = 0
     ocrLabel.textColor = .secondaryLabel
     ocrLabel.font = .systemFont(ofSize: 14, weight: .medium)
+
+    configureCoverageEditor()
 
     assetStatusLabel.font = .systemFont(ofSize: 13, weight: .semibold)
     assetStatusLabel.textColor = .secondaryLabel
@@ -319,8 +340,9 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     let districtRow = makeFieldGroup(title: "区/县/行政区", field: districtButton)
     let descriptionGroup = makeTextViewGroup(title: "说明备注", textView: descriptionView)
     let teachingNoteGroup = makeTextViewGroup(title: "授课备注", textView: teachingNoteView)
+    let coverageGroup = makeCoverageEditorGroup()
 
-    [makeSectionTitle("基础信息"), titleGroup, yearCountryRow, teachingRow, provinceRow, districtRow, securityTagsRow, descriptionGroup, teachingNoteGroup].forEach {
+    [makeSectionTitle("基础信息"), titleGroup, yearCountryRow, teachingRow, provinceRow, districtRow, securityTagsRow, descriptionGroup, teachingNoteGroup, coverageGroup].forEach {
       metadataStack.addArrangedSubview($0)
     }
 
@@ -363,12 +385,16 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       imageZoomScrollView.trailingAnchor.constraint(equalTo: imageCard.trailingAnchor),
       imageZoomScrollView.bottomAnchor.constraint(equalTo: imageCard.bottomAnchor),
 
-      panelGrabber.topAnchor.constraint(equalTo: infoPanel.contentView.topAnchor, constant: 10),
-      panelGrabber.centerXAnchor.constraint(equalTo: infoPanel.contentView.centerXAnchor),
+      panelGrabberHitArea.topAnchor.constraint(equalTo: infoPanel.contentView.topAnchor),
+      panelGrabberHitArea.centerXAnchor.constraint(equalTo: infoPanel.contentView.centerXAnchor),
+      panelGrabberHitArea.widthAnchor.constraint(equalToConstant: 72),
+      panelGrabberHitArea.heightAnchor.constraint(equalToConstant: 28),
+      panelGrabber.centerXAnchor.constraint(equalTo: panelGrabberHitArea.centerXAnchor),
+      panelGrabber.centerYAnchor.constraint(equalTo: panelGrabberHitArea.centerYAnchor, constant: 3),
       panelGrabber.widthAnchor.constraint(equalToConstant: 42),
       panelGrabber.heightAnchor.constraint(equalToConstant: 5),
 
-      scrollView.topAnchor.constraint(equalTo: panelGrabber.bottomAnchor, constant: 8),
+      scrollView.topAnchor.constraint(equalTo: panelGrabberHitArea.bottomAnchor),
       scrollView.leadingAnchor.constraint(equalTo: infoPanel.contentView.leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: infoPanel.contentView.trailingAnchor),
       scrollView.bottomAnchor.constraint(equalTo: infoPanel.contentView.bottomAnchor),
@@ -443,28 +469,198 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     ocrLabel.text = excerpt.isEmpty ? "无 OCR 文本" : "OCR 摘要\n\(excerpt)"
     assetStatusLabel.text = assetStatusText()
     updateImageActionButton()
+    draftCoverageBounds = currentCoverageBounds()
+    draftOutlinePoints = Self.normalizedOutlineForEditing(record.coverageOutline ?? [])
+    outlineEditorView.configure(points: draftOutlinePoints)
+    updateCoverageMapRegion()
+    updateCoverageSummary()
   }
 
-  private func updateAdaptiveLayout() {
+  private func currentCoverageBounds() -> (north: Double, south: Double, east: Double, west: Double)? {
+    guard
+      let north = record.northLatitude,
+      let south = record.southLatitude,
+      let east = record.eastLongitude,
+      let west = record.westLongitude,
+      north > south,
+      east > west
+    else {
+      return nil
+    }
+    return (north, south, east, west)
+  }
+
+  private func updateCoverageMapRegion() {
+    coverageMapView.removeOverlays(coverageMapView.overlays)
+    if let bounds = draftCoverageBounds {
+      let center = CLLocationCoordinate2D(
+        latitude: (bounds.north + bounds.south) / 2,
+        longitude: (bounds.east + bounds.west) / 2
+      )
+      let span = MKCoordinateSpan(
+        latitudeDelta: max((bounds.north - bounds.south) * 1.25, 0.05),
+        longitudeDelta: max((bounds.east - bounds.west) * 1.25, 0.05)
+      )
+      coverageMapView.setRegion(MKCoordinateRegion(center: center, span: span), animated: false)
+      coverageMapView.addOverlay(coveragePolygon(from: bounds))
+      return
+    }
+
+    if let latitude = record.latitude, let longitude = record.longitude {
+      coverageMapView.setRegion(
+        MKCoordinateRegion(
+          center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+          span: MKCoordinateSpan(latitudeDelta: 4, longitudeDelta: 5)
+        ),
+        animated: false
+      )
+      return
+    }
+
+    coverageMapView.setRegion(
+      MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 35.8617, longitude: 104.1954),
+        span: MKCoordinateSpan(latitudeDelta: 28, longitudeDelta: 38)
+      ),
+      animated: false
+    )
+  }
+
+  @objc private func useVisibleMapRegionForCoverage() {
+    container.haptics.selectionChanged()
+    let region = coverageMapView.region
+    let halfLat = region.span.latitudeDelta / 2
+    let halfLon = region.span.longitudeDelta / 2
+    draftCoverageBounds = (
+      north: min(region.center.latitude + halfLat, 90),
+      south: max(region.center.latitude - halfLat, -90),
+      east: min(region.center.longitude + halfLon, 180),
+      west: max(region.center.longitude - halfLon, -180)
+    )
+    updateCoverageMapRegion()
+    updateCoverageSummary()
+  }
+
+  @objc private func undoOutlinePoint() {
+    outlineEditorView.removeLastPoint()
+  }
+
+  @objc private func clearOutlinePoints() {
+    outlineEditorView.clearPoints()
+  }
+
+  @objc private func runAICoverageExtraction() {
+    container.haptics.mediumTap()
+    aiCoverageButton.isEnabled = false
+    var config = aiCoverageButton.configuration ?? UIButton.Configuration.tinted()
+    config.title = "AI 提取中…"
+    aiCoverageButton.configuration = config
+
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let updated = try await self.container.aiMetadataService.organizeRecord(self.record)
+        await MainActor.run {
+          self.record = updated
+          self.onSave(updated)
+          self.render()
+          self.container.haptics.success()
+          self.restoreAICoverageButton()
+          self.showAlert(title: "AI 提取完成", message: "已回填经纬度范围和缩略轮廓，保存时会同步到服务端。")
+        }
+      } catch {
+        await MainActor.run {
+          self.container.haptics.error()
+          self.restoreAICoverageButton()
+          self.showAlert(title: "AI 提取失败", message: error.localizedDescription)
+        }
+      }
+    }
+  }
+
+  private func restoreAICoverageButton() {
+    aiCoverageButton.isEnabled = true
+    var config = aiCoverageButton.configuration ?? UIButton.Configuration.tinted()
+    config.title = "AI 提取范围/轮廓"
+    config.image = UIImage(systemName: "sparkles")
+    aiCoverageButton.configuration = config
+  }
+
+  private func updateCoverageSummary() {
+    let boundsText: String
+    if let bounds = draftCoverageBounds {
+      let lat = (bounds.north + bounds.south) / 2
+      let lon = (bounds.east + bounds.west) / 2
+      boundsText = "中心 \(formatCoordinate(lat)), \(formatCoordinate(lon))  范围 \(formatCoordinate(bounds.south))-\(formatCoordinate(bounds.north))N / \(formatCoordinate(bounds.west))-\(formatCoordinate(bounds.east))E"
+    } else {
+      boundsText = "覆盖范围待校准"
+    }
+    let outlineText = draftOutlinePoints.count >= 3 ? "轮廓 \(draftOutlinePoints.count) 点" : "轮廓待手动点选"
+    coverageSummaryLabel.text = "\(boundsText)\n\(outlineText)"
+  }
+
+  private static func normalizedOutlineForEditing(_ points: [MapCoveragePoint]) -> [MapCoveragePoint] {
+    guard points.count >= 3 else { return points }
+    let clamped = Array(points.prefix(12)).map {
+      MapCoveragePoint(x: min(max($0.x, 0), 1), y: min(max($0.y, 0), 1))
+    }
+    let centerX = clamped.map(\.x).reduce(0, +) / Double(clamped.count)
+    let centerY = clamped.map(\.y).reduce(0, +) / Double(clamped.count)
+    return clamped.sorted { left, right in
+      atan2(left.y - centerY, left.x - centerX) < atan2(right.y - centerY, right.x - centerX)
+    }
+  }
+
+  private func formatCoordinate(_ value: Double) -> String {
+    String(format: "%.4f", value)
+  }
+
+  private func coveragePolygon(from bounds: (north: Double, south: Double, east: Double, west: Double)) -> MKPolygon {
+    let coordinates = [
+      CLLocationCoordinate2D(latitude: bounds.north, longitude: bounds.west),
+      CLLocationCoordinate2D(latitude: bounds.north, longitude: bounds.east),
+      CLLocationCoordinate2D(latitude: bounds.south, longitude: bounds.east),
+      CLLocationCoordinate2D(latitude: bounds.south, longitude: bounds.west)
+    ]
+    return MKPolygon(coordinates: coordinates, count: coordinates.count)
+  }
+
+  private func updateAdaptiveLayout(animated: Bool = false) {
     let usePadPanel = traitCollection.userInterfaceIdiom == .pad || traitCollection.horizontalSizeClass == .regular
     let safeHeight = max(view.bounds.height - view.safeAreaInsets.top - view.safeAreaInsets.bottom, 420)
     let safeWidth = max(view.bounds.width - view.safeAreaInsets.left - view.safeAreaInsets.right, 320)
 
-    if usePadPanel {
-      panelWidthConstraint?.isActive = true
-      panelHeightConstraint?.constant = safeHeight - 24
-      panelWidthConstraint?.constant = min(max(safeWidth * 0.34, 360), 440)
-      panelGrabber.alpha = 0
-      floatingActionRow.axis = .vertical
-      floatingActionRow.alignment = .trailing
-    } else {
-      panelWidthConstraint?.isActive = false
-      panelHeightConstraint?.constant = min(max(safeHeight * 0.46, 300), 430)
-      panelGrabber.alpha = 1
-      floatingActionRow.axis = .horizontal
-      floatingActionRow.alignment = .center
+    let updates = {
+      if usePadPanel {
+        self.panelWidthConstraint?.isActive = true
+        self.panelHeightConstraint?.constant = safeHeight - 24
+        self.panelWidthConstraint?.constant = min(max(safeWidth * 0.34, 360), 440)
+        self.panelGrabber.alpha = 0
+        self.floatingActionRow.axis = .vertical
+        self.floatingActionRow.alignment = .trailing
+      } else {
+        self.panelWidthConstraint?.isActive = false
+        self.panelHeightConstraint?.constant = self.isInfoPanelExpanded ? safeHeight - 12 : min(max(safeHeight * 0.46, 300), 430)
+        self.panelGrabber.alpha = 1
+        self.floatingActionRow.axis = .horizontal
+        self.floatingActionRow.alignment = .center
+      }
+      self.applyInfoPanelState(animated: false)
+      self.view.layoutIfNeeded()
     }
-    applyInfoPanelState(animated: false)
+
+    if animated {
+      UIView.animate(
+        withDuration: 0.28,
+        delay: 0,
+        usingSpringWithDamping: 0.92,
+        initialSpringVelocity: 0.25,
+        options: [.beginFromCurrentState, .allowUserInteraction],
+        animations: updates
+      )
+    } else {
+      updates()
+    }
   }
 
   @objc private func saveMetadata() {
@@ -488,7 +684,14 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       province: selectedProvinceName,
       city: selectedCityName,
       district: selectedDistrictName,
-      tags: tags
+      tags: tags,
+      latitude: draftCoverageBounds.map { ($0.north + $0.south) / 2 },
+      longitude: draftCoverageBounds.map { ($0.east + $0.west) / 2 },
+      northLatitude: draftCoverageBounds?.north,
+      southLatitude: draftCoverageBounds?.south,
+      eastLongitude: draftCoverageBounds?.east,
+      westLongitude: draftCoverageBounds?.west,
+      coverageOutline: draftOutlinePoints
     )
 
     do {
@@ -526,6 +729,16 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       alert.addAction(UIAlertAction(title: "知道了", style: .default))
       present(alert, animated: true)
     }
+  }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    guard gestureRecognizer === infoPanelPanGesture else { return true }
+    let touchedView = touch.view
+    if touchedView?.isDescendant(of: outlineEditorView) == true ||
+      touchedView?.isDescendant(of: coverageMapView) == true {
+      return false
+    }
+    return true
   }
 
   private func loadRemoteDetailIfNeeded() {
@@ -822,6 +1035,18 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     }
   }
 
+  func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+    guard let polygon = overlay as? MKPolygon else {
+      return MKOverlayRenderer(overlay: overlay)
+    }
+    let renderer = MKPolygonRenderer(polygon: polygon)
+    renderer.fillColor = UIColor.systemTeal.withAlphaComponent(0.16)
+    renderer.strokeColor = UIColor.label.withAlphaComponent(0.78)
+    renderer.lineWidth = 2
+    renderer.lineDashPattern = [7, 4]
+    return renderer
+  }
+
   func viewForZooming(in scrollView: UIScrollView) -> UIView? {
     scrollView === imageZoomScrollView ? imageContainerView : nil
   }
@@ -927,6 +1152,75 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     button.layer.borderWidth = 1
     button.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
     button.clipsToBounds = true
+  }
+
+  private func configureCoverageEditor() {
+    coverageMapView.translatesAutoresizingMaskIntoConstraints = false
+    coverageMapView.delegate = self
+    coverageMapView.mapType = .mutedStandard
+    coverageMapView.pointOfInterestFilter = .excludingAll
+    coverageMapView.showsCompass = false
+    coverageMapView.showsScale = true
+    coverageMapView.layer.cornerRadius = 14
+    coverageMapView.layer.cornerCurve = .continuous
+    coverageMapView.clipsToBounds = true
+    coverageMapView.heightAnchor.constraint(equalToConstant: 180).isActive = true
+
+    coverageSummaryLabel.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
+    coverageSummaryLabel.textColor = .secondaryLabel
+    coverageSummaryLabel.numberOfLines = 2
+
+    outlineEditorView.translatesAutoresizingMaskIntoConstraints = false
+    outlineEditorView.heightAnchor.constraint(equalToConstant: 112).isActive = true
+    outlineEditorView.onPointsChanged = { [weak self] points in
+      self?.draftOutlinePoints = points
+      self?.updateCoverageSummary()
+    }
+
+    styleInlineActionButton(useMapRegionButton, title: "使用当前地图视窗", symbol: "viewfinder.rectangular")
+    styleInlineActionButton(aiCoverageButton, title: "AI 提取范围/轮廓", symbol: "sparkles")
+    styleInlineActionButton(undoOutlineButton, title: "删除选中/撤销", symbol: "arrow.uturn.backward")
+    styleInlineActionButton(clearOutlineButton, title: "清空轮廓", symbol: "xmark")
+    useMapRegionButton.addTarget(self, action: #selector(useVisibleMapRegionForCoverage), for: .touchUpInside)
+    aiCoverageButton.addTarget(self, action: #selector(runAICoverageExtraction), for: .touchUpInside)
+    undoOutlineButton.addTarget(self, action: #selector(undoOutlinePoint), for: .touchUpInside)
+    clearOutlineButton.addTarget(self, action: #selector(clearOutlinePoints), for: .touchUpInside)
+  }
+
+  private func styleInlineActionButton(_ button: UIButton, title: String, symbol: String) {
+    var config = UIButton.Configuration.tinted()
+    config.title = title
+    config.image = UIImage(systemName: symbol)
+    config.imagePadding = 5
+    config.cornerStyle = .medium
+    config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
+    button.configuration = config
+    button.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
+  }
+
+  private func makeCoverageEditorGroup() -> UIStackView {
+    let mapActions = UIStackView(arrangedSubviews: [useMapRegionButton, aiCoverageButton])
+    mapActions.axis = .vertical
+    mapActions.spacing = 8
+
+    let outlineActions = UIStackView(arrangedSubviews: [undoOutlineButton, clearOutlineButton])
+    outlineActions.axis = .horizontal
+    outlineActions.spacing = 8
+    outlineActions.distribution = .fillEqually
+
+    let stack = UIStackView(arrangedSubviews: [
+      makeSectionTitle("地图校准"),
+      makeFieldCaption("移动/缩放地图到实际覆盖区域，保存当前视窗会自动回填中心经纬度和外接框。"),
+      coverageMapView,
+      mapActions,
+      coverageSummaryLabel,
+      makeFieldCaption("缩略轮廓：点空白处加点，拖动青色节点调整，点中节点后可删除。"),
+      outlineEditorView,
+      outlineActions
+    ])
+    stack.axis = .vertical
+    stack.spacing = 8
+    return stack
   }
 
   private func makeSectionTitle(_ text: String) -> UILabel {
@@ -1172,7 +1466,17 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
   @objc private func toggleInformationPanel() {
     container.haptics.selectionChanged()
     isInfoPanelPresented.toggle()
+    if !isInfoPanelPresented {
+      isInfoPanelExpanded = false
+    }
     applyInfoPanelState(animated: true)
+  }
+
+  @objc private func toggleInformationPanelExpanded() {
+    container.haptics.selectionChanged()
+    isInfoPanelPresented = true
+    isInfoPanelExpanded.toggle()
+    updateAdaptiveLayout(animated: true)
   }
 
   private var hasRemoteOriginalSource: Bool {
@@ -1201,9 +1505,18 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       if usePadPanel {
         shouldHide = velocity.x > 200 || infoPanel.transform.tx > maxTravel * 0.4
       } else {
+        if velocity.y < -220 || translation.y < -80 {
+          isInfoPanelPresented = true
+          isInfoPanelExpanded = true
+          updateAdaptiveLayout(animated: true)
+          return
+        }
         shouldHide = velocity.y > 220 || infoPanel.transform.ty > maxTravel * 0.35
       }
       isInfoPanelPresented = !shouldHide
+      if shouldHide {
+        isInfoPanelExpanded = false
+      }
       applyInfoPanelState(animated: true)
     default:
       break
@@ -1217,12 +1530,13 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
       let panelWidth = (panelWidthConstraint?.constant ?? 360) + 24
       hiddenTransform = CGAffineTransform(translationX: panelWidth, y: 0)
     } else {
-      let panelHeight = (panelHeightConstraint?.constant ?? 340) + 20
+      let panelHeight = max(panelHeightConstraint?.constant ?? 340, view.bounds.height) + 80
       hiddenTransform = CGAffineTransform(translationX: 0, y: panelHeight)
     }
 
     let updates = {
       self.infoPanel.transform = self.isInfoPanelPresented ? .identity : hiddenTransform
+      self.infoPanel.accessibilityElementsHidden = !self.isInfoPanelPresented
       var config = self.infoButton.configuration ?? UIButton.Configuration.filled()
       config.baseBackgroundColor = self.isInfoPanelPresented
         ? UIColor.systemBlue.withAlphaComponent(0.88)
@@ -1274,6 +1588,209 @@ final class MapDetailViewController: UIViewController, UIScrollViewDelegate, UIT
     navigationBar.scrollEdgeAppearance = previousScrollEdgeAppearance
     navigationBar.compactAppearance = previousCompactAppearance
     navigationBar.tintColor = previousTintColor ?? view.tintColor
+  }
+}
+
+private final class CoverageOutlineEditorView: UIView {
+  var onPointsChanged: (([MapCoveragePoint]) -> Void)?
+  private static let maxPointCount = 24
+  private var points: [MapCoveragePoint] = []
+  private var selectedIndex: Int?
+  private var touchStartPoint: CGPoint?
+  private var didDragSelectedPoint = false
+  private let hitRadius: CGFloat = 22
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isMultipleTouchEnabled = false
+    backgroundColor = .tertiarySystemBackground
+    layer.cornerRadius = 14
+    layer.cornerCurve = .continuous
+    layer.borderWidth = 1
+    layer.borderColor = UIColor.separator.cgColor
+    clipsToBounds = true
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func configure(points: [MapCoveragePoint]) {
+    self.points = points
+    selectedIndex = points.isEmpty ? nil : 0
+    setNeedsDisplay()
+  }
+
+  func removeLastPoint() {
+    guard !points.isEmpty else { return }
+    if let selectedIndex, points.indices.contains(selectedIndex) {
+      points.remove(at: selectedIndex)
+    } else {
+      points.removeLast()
+    }
+    self.selectedIndex = points.isEmpty ? nil : min(selectedIndex ?? points.count - 1, points.count - 1)
+    notify()
+  }
+
+  func clearPoints() {
+    points.removeAll()
+    selectedIndex = nil
+    notify()
+  }
+
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let location = touches.first?.location(in: self), bounds.width > 0, bounds.height > 0 else { return }
+    enclosingScrollView()?.isScrollEnabled = false
+    touchStartPoint = location
+    didDragSelectedPoint = false
+    selectedIndex = nearestPointIndex(to: location)
+    setNeedsDisplay()
+  }
+
+  override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let location = touches.first?.location(in: self),
+          let selectedIndex,
+          points.indices.contains(selectedIndex),
+          bounds.width > 0,
+          bounds.height > 0
+    else { return }
+    didDragSelectedPoint = true
+    movePoint(at: selectedIndex, to: location)
+  }
+
+  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+    defer {
+      touchStartPoint = nil
+      didDragSelectedPoint = false
+      enclosingScrollView()?.isScrollEnabled = true
+    }
+
+    guard let location = touches.first?.location(in: self), bounds.width > 0, bounds.height > 0 else { return }
+    if let selectedIndex, didDragSelectedPoint {
+      movePoint(at: selectedIndex, to: location)
+      return
+    }
+
+    if let start = touchStartPoint, hypot(location.x - start.x, location.y - start.y) > 8 {
+      return
+    }
+
+    if let index = nearestPointIndex(to: location) {
+      selectedIndex = index
+      setNeedsDisplay()
+      return
+    }
+
+    addPoint(at: location)
+  }
+
+  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+    touchStartPoint = nil
+    didDragSelectedPoint = false
+    enclosingScrollView()?.isScrollEnabled = true
+  }
+
+  private func addPoint(at location: CGPoint) {
+    guard bounds.width > 0, bounds.height > 0 else { return }
+    guard points.count < Self.maxPointCount else { return }
+    points.append(
+      MapCoveragePoint(
+        x: Double(min(max(location.x / bounds.width, 0), 1)),
+        y: Double(min(max(location.y / bounds.height, 0), 1))
+      )
+    )
+    selectedIndex = points.count - 1
+    notify()
+  }
+
+  private func movePoint(at index: Int, to location: CGPoint) {
+    guard bounds.width > 0, bounds.height > 0 else { return }
+    guard points.indices.contains(index) else { return }
+    points[index] = MapCoveragePoint(
+      x: Double(min(max(location.x / bounds.width, 0), 1)),
+      y: Double(min(max(location.y / bounds.height, 0), 1))
+    )
+    notify()
+  }
+
+  private func enclosingScrollView() -> UIScrollView? {
+    var current = superview
+    while let view = current {
+      if let scrollView = view as? UIScrollView {
+        return scrollView
+      }
+      current = view.superview
+    }
+    return nil
+  }
+
+  private func nearestPointIndex(to location: CGPoint) -> Int? {
+    let mapped = mappedPoints(in: bounds)
+    guard let best = mapped.enumerated().min(by: { left, right in
+      hypot(left.element.x - location.x, left.element.y - location.y) <
+        hypot(right.element.x - location.x, right.element.y - location.y)
+    }) else { return nil }
+    let distance = hypot(best.element.x - location.x, best.element.y - location.y)
+    return distance <= hitRadius ? best.offset : nil
+  }
+
+  private func notify() {
+    setNeedsDisplay()
+    onPointsChanged?(points)
+  }
+
+  private func mappedPoints(in rect: CGRect) -> [CGPoint] {
+    points.map { CGPoint(x: CGFloat($0.x) * rect.width, y: CGFloat($0.y) * rect.height) }
+  }
+
+  override func draw(_ rect: CGRect) {
+    guard let context = UIGraphicsGetCurrentContext() else { return }
+    UIColor.separator.withAlphaComponent(0.35).setStroke()
+    context.setLineWidth(0.5)
+    for index in 1..<4 {
+      let x = rect.minX + rect.width * CGFloat(index) / 4
+      context.move(to: CGPoint(x: x, y: rect.minY))
+      context.addLine(to: CGPoint(x: x, y: rect.maxY))
+      let y = rect.minY + rect.height * CGFloat(index) / 4
+      context.move(to: CGPoint(x: rect.minX, y: y))
+      context.addLine(to: CGPoint(x: rect.maxX, y: y))
+    }
+    context.strokePath()
+
+    let mapped = mappedPoints(in: rect)
+    if mapped.count >= 2 {
+      let path = UIBezierPath()
+      path.move(to: mapped[0])
+      mapped.dropFirst().forEach { path.addLine(to: $0) }
+      if mapped.count >= 3 {
+        path.close()
+        UIColor.systemTeal.withAlphaComponent(0.12).setFill()
+        path.fill()
+      }
+      UIColor.label.withAlphaComponent(0.75).setStroke()
+      path.lineWidth = 1.6
+      path.stroke()
+    }
+
+    for (index, point) in mapped.enumerated() {
+      let isSelected = index == selectedIndex
+      let radius: CGFloat = isSelected ? 7 : 5
+      let dotRect = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
+      UIColor.systemBackground.setFill()
+      UIBezierPath(ovalIn: dotRect.insetBy(dx: -1, dy: -1)).fill()
+      UIColor.systemTeal.setFill()
+      UIBezierPath(ovalIn: dotRect).fill()
+      if isSelected {
+        UIColor.systemTeal.withAlphaComponent(0.18).setFill()
+        UIBezierPath(ovalIn: dotRect.insetBy(dx: -10, dy: -10)).fill()
+        UIColor.label.withAlphaComponent(0.8).setStroke()
+        UIBezierPath(ovalIn: dotRect.insetBy(dx: -3, dy: -3)).stroke()
+      } else if index == 0 {
+        UIColor.label.withAlphaComponent(0.7).setStroke()
+        UIBezierPath(ovalIn: dotRect.insetBy(dx: -2, dy: -2)).stroke()
+      }
+    }
   }
 }
 

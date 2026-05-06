@@ -14,6 +14,7 @@ Roamly 是一个用于历史地图与地图图片整理、检索、标注和浏�
 当前仓库是一个 Node.js + React 的 monorepo：
 - `server/`：Express API、SQLite、文件扫描、OCR、运行时配置、项目元数据存储
 - `web/`：React + Vite 前端
+- `ios/`：UIKit iOS 客户端，支持离线图库、同步、OCR/AI 整理、范围与轮廓校准
 - `maps/`：本地示例地图目录
 - `bin/roamly`：NPM 安装后的 CLI 启动入口
 - `scripts/npm-release.sh`：NPM 发布打包脚本
@@ -58,7 +59,14 @@ Roamly 是一个用于历史地图与地图图片整理、检索、标注和浏�
 - OCR 结果会写入索引并参与搜索
 - 支持手动触发 OCR 重建
 
-### 6. 项目级元数据持久化
+### 6. iOS 移动端整理
+- UIKit 客户端支持离线图库、图库筛选、详情查看与本地缓存
+- 支持批量 OCR、批量年代、批量地区和 AI 批量整理
+- 批量 OCR / AI 任务使用底部全局进度条展示当前进度
+- 支持 DeepSeek、OpenAI 和 OpenAI-Compatible 服务商配置、模型获取、延迟测试和 AI 对话历史
+- 支持 AI 提取经纬度范围与缩略图 `coverage_outline`，并可在详情页手动校准地图轮廓
+
+### 7. 项目级元数据持久化
 Roamly 不只保存数据库，还会维护项目级 sidecar 元数据：
 - local 模式：写入 `<地图根目录>/.roamly/project-data.json`
 - webdav 模式：写入 `<WebDAV 根路径>/.roamly/project-data.json`

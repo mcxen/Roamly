@@ -28,6 +28,11 @@ db.exec(`
     district TEXT,
     latitude REAL,
     longitude REAL,
+    north_latitude REAL,
+    south_latitude REAL,
+    east_longitude REAL,
+    west_longitude REAL,
+    coverage_outline TEXT,
     year_label TEXT,
     campaign TEXT,
     teaching_use TEXT,
@@ -87,6 +92,11 @@ maybeAddColumn('city TEXT');
 maybeAddColumn('district TEXT');
 maybeAddColumn('latitude REAL');
 maybeAddColumn('longitude REAL');
+maybeAddColumn('north_latitude REAL');
+maybeAddColumn('south_latitude REAL');
+maybeAddColumn('east_longitude REAL');
+maybeAddColumn('west_longitude REAL');
+maybeAddColumn('coverage_outline TEXT');
 maybeAddColumn('year_label TEXT');
 maybeAddColumn('campaign TEXT');
 maybeAddColumn('teaching_use TEXT');
@@ -123,6 +133,11 @@ export const statements = {
       district,
       latitude,
       longitude,
+      north_latitude,
+      south_latitude,
+      east_longitude,
+      west_longitude,
+      coverage_outline,
       year_label,
       campaign,
       teaching_use,
@@ -162,6 +177,11 @@ export const statements = {
       @district,
       @latitude,
       @longitude,
+      @north_latitude,
+      @south_latitude,
+      @east_longitude,
+      @west_longitude,
+      @coverage_outline,
       @year_label,
       @campaign,
       @teaching_use,
@@ -206,6 +226,11 @@ export const statements = {
       district = COALESCE(NULLIF(maps.district, ''), excluded.district),
       latitude = COALESCE(maps.latitude, excluded.latitude),
       longitude = COALESCE(maps.longitude, excluded.longitude),
+      north_latitude = COALESCE(maps.north_latitude, excluded.north_latitude),
+      south_latitude = COALESCE(maps.south_latitude, excluded.south_latitude),
+      east_longitude = COALESCE(maps.east_longitude, excluded.east_longitude),
+      west_longitude = COALESCE(maps.west_longitude, excluded.west_longitude),
+      coverage_outline = COALESCE(NULLIF(maps.coverage_outline, ''), excluded.coverage_outline),
       campaign = COALESCE(NULLIF(maps.campaign, ''), excluded.campaign),
       teaching_use = COALESCE(NULLIF(maps.teaching_use, ''), excluded.teaching_use),
       teaching_note = COALESCE(NULLIF(maps.teaching_note, ''), excluded.teaching_note),
@@ -254,6 +279,11 @@ export const statements = {
         district = @district,
         latitude = @latitude,
         longitude = @longitude,
+        north_latitude = @north_latitude,
+        south_latitude = @south_latitude,
+        east_longitude = @east_longitude,
+        west_longitude = @west_longitude,
+        coverage_outline = @coverage_outline,
         year_label = @year_label,
         campaign = @campaign,
         teaching_use = @teaching_use,
@@ -354,6 +384,7 @@ export const rowToMap = (row) => {
     tags: parseTags(row.tags),
     related_countries: parseTags(row.related_countries),
     related_provinces: parseTags(row.related_provinces),
+    coverage_outline: parseJsonObject(row.coverage_outline, null),
     ocr_blocks: parseJsonObject(row.ocr_blocks, []),
     favorite: Boolean(row.favorite)
   };

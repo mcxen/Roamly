@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon --watch src --ext js,json --signal SIGTERM src/index.js",
     "start": "node src/index.js",
-    "build": "node src/scripts/ensure-data-dir.js"
+    "build": "node src/scripts/ensure-data-dir.js",
+    "vision": "node src/scripts/apple-vision-analyze.js"
   },
   "dependencies": {
     "chokidar": "^3.6.0",

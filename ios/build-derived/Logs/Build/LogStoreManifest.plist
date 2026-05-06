@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>11</integer>
+	<key>logs</key>
+	<dict>
+		<key>40DD0E97-528F-42B6-AB3F-42E03C4020E2</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>40DD0E97-528F-42B6-AB3F-42E03C4020E2.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>RoamlyMobile project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>RoamlyMobile</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project RoamlyMobile with scheme RoamlyMobile and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>799672944.39890206</real>
+			<key>timeStoppedRecording</key>
+			<real>799672966.14297199</real>
+			<key>title</key>
+			<string>Building project RoamlyMobile with scheme RoamlyMobile and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>40DD0E97-528F-42B6-AB3F-42E03C4020E2</string>
+		</dict>
+		<key>8AB5F416-9611-4781-AB01-51369AE00C75</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>8AB5F416-9611-4781-AB01-51369AE00C75.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>RoamlyMobile project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>RoamlyMobile</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project RoamlyMobile with scheme RoamlyMobile and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>799673066.28278196</real>
+			<key>timeStoppedRecording</key>
+			<real>799673093.15843403</real>
+			<key>title</key>
+			<string>Building project RoamlyMobile with scheme RoamlyMobile and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>8AB5F416-9611-4781-AB01-51369AE00C75</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

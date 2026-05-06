@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -44,7 +44,7 @@
 		4A5EB0A3C3E099EB35BF6B2C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4F8437BA066AEB55B61A4713 /* country-region-data.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "country-region-data.json"; sourceTree = "<group>"; };
 		503567727D97B7F2A168563E /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
-		61A409D428DCD96617433723 /* RoamlyMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoamlyMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		61A409D428DCD96617433723 /* RoamlyMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoamlyMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64D80E08401E100AD86C6A83 /* china-city.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "china-city.json"; sourceTree = "<group>"; };
 		6637ECA6E93EF8728A6587A9 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
 		89D48DBE6B0B0A55169CA6AB /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -261,7 +261,6 @@
 			);
 			mainGroup = BFEE825073C5F833E04B6D14;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -323,6 +322,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = M6WQA48PJ2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Support/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -406,6 +406,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = M6WQA48PJ2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Support/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;

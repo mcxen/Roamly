@@ -5,6 +5,47 @@ struct MapRecordFiles: Codable, Hashable {
   let thumbnail: String
 }
 
+struct MapCoveragePoint: Codable, Hashable {
+  let x: Double
+  let y: Double
+
+  init(x: Double, y: Double) {
+    self.x = x
+    self.y = y
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    x = try Self.decodeFlexibleDouble(for: .x, from: container)
+    y = try Self.decodeFlexibleDouble(for: .y, from: container)
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case x
+    case y
+  }
+
+  private static func decodeFlexibleDouble(
+    for key: CodingKeys,
+    from container: KeyedDecodingContainer<CodingKeys>
+  ) throws -> Double {
+    if let value = try? container.decode(Double.self, forKey: key) {
+      return value
+    }
+    if let text = try? container.decode(String.self, forKey: key),
+       let value = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+      return value
+    }
+    throw DecodingError.typeMismatch(
+      Double.self,
+      DecodingError.Context(
+        codingPath: container.codingPath + [key],
+        debugDescription: "Expected a number or numeric string."
+      )
+    )
+  }
+}
+
 struct MapRecord: Codable, Hashable {
   let id: String
   let fileName: String
@@ -26,6 +67,7 @@ struct MapRecord: Codable, Hashable {
   let southLatitude: Double?
   let eastLongitude: Double?
   let westLongitude: Double?
+  let coverageOutline: [MapCoveragePoint]?
   let yearLabel: String?
   let campaign: String?
   let teachingUse: String?
@@ -67,6 +109,7 @@ struct MapRecord: Codable, Hashable {
     case southLatitude = "south_latitude"
     case eastLongitude = "east_longitude"
     case westLongitude = "west_longitude"
+    case coverageOutline = "coverage_outline"
     case yearLabel = "year_label"
     case campaign
     case teachingUse = "teaching_use"
@@ -144,6 +187,7 @@ struct MapRecord: Codable, Hashable {
       southLatitude: nil,
       eastLongitude: nil,
       westLongitude: nil,
+      coverageOutline: nil,
       yearLabel: nil,
       campaign: nil,
       teachingUse: nil,
@@ -188,6 +232,7 @@ struct MapRecord: Codable, Hashable {
       southLatitude: southLatitude,
       eastLongitude: eastLongitude,
       westLongitude: westLongitude,
+      coverageOutline: coverageOutline,
       yearLabel: yearLabel,
       campaign: campaign,
       teachingUse: teachingUse,
@@ -218,12 +263,20 @@ struct MapRecord: Codable, Hashable {
     teachingUse: String,
     teachingNote: String,
     securityLevel: String,
+    scopeLevel: String? = nil,
     countryCode: String? = nil,
     countryName: String,
     province: String,
     city: String,
     district: String,
-    tags: [String]
+    tags: [String],
+    latitude: Double? = nil,
+    longitude: Double? = nil,
+    northLatitude: Double? = nil,
+    southLatitude: Double? = nil,
+    eastLongitude: Double? = nil,
+    westLongitude: Double? = nil,
+    coverageOutline: [MapCoveragePoint]? = nil
   ) -> MapRecord {
     MapRecord(
       id: id,
@@ -232,7 +285,7 @@ struct MapRecord: Codable, Hashable {
       description: description,
       tags: tags,
       collectionUnit: collectionUnit,
-      scopeLevel: scopeLevel,
+      scopeLevel: scopeLevel?.isEmpty == false ? scopeLevel : self.scopeLevel,
       countryCode: countryCode?.isEmpty == false ? countryCode : self.countryCode,
       countryName: countryName.isEmpty ? nil : countryName,
       province: province.isEmpty ? nil : province,
@@ -240,12 +293,13 @@ struct MapRecord: Codable, Hashable {
       relatedProvinces: relatedProvinces,
       city: city.isEmpty ? nil : city,
       district: district.isEmpty ? nil : district,
-      latitude: latitude,
-      longitude: longitude,
-      northLatitude: northLatitude,
-      southLatitude: southLatitude,
-      eastLongitude: eastLongitude,
-      westLongitude: westLongitude,
+      latitude: latitude ?? self.latitude,
+      longitude: longitude ?? self.longitude,
+      northLatitude: northLatitude ?? self.northLatitude,
+      southLatitude: southLatitude ?? self.southLatitude,
+      eastLongitude: eastLongitude ?? self.eastLongitude,
+      westLongitude: westLongitude ?? self.westLongitude,
+      coverageOutline: coverageOutline ?? self.coverageOutline,
       yearLabel: yearLabel.isEmpty ? nil : yearLabel,
       campaign: campaign.isEmpty ? nil : campaign,
       teachingUse: teachingUse.isEmpty ? nil : teachingUse,
@@ -298,6 +352,7 @@ struct MapRecord: Codable, Hashable {
       southLatitude: southLatitude,
       eastLongitude: eastLongitude,
       westLongitude: westLongitude,
+      coverageOutline: coverageOutline,
       yearLabel: yearLabel,
       campaign: campaign,
       teachingUse: teachingUse,

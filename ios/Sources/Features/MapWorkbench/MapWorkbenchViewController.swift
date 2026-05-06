@@ -18,11 +18,31 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     }
   }
 
+  private enum WorkbenchFacet: Int, CaseIterable {
+    case coverage
+    case reliable
+    case authorization
+    case wgs84
+
+    var title: String {
+      switch self {
+      case .coverage: return "覆盖"
+      case .reliable: return "可信"
+      case .authorization: return "授权"
+      case .wgs84: return "WGS84"
+      }
+    }
+  }
+
   private let container: AppContainer
   private var records: [MapRecord] = []
   private var queueRecords: [MapRecord] = []
   private var selectedFilter: WorkbenchFilter = .pending
+  private var selectedFacet: WorkbenchFacet = .coverage
+  private var isWorkbenchCollapsed = false
   private var chipButtons: [FilterChipButton] = []
+  private var facetButtons: [FilterChipButton] = []
+  private var collapsibleWorkbenchViews: [UIView] = []
 
   private let mapView = MKMapView()
   private let searchCard = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterial))
@@ -39,7 +59,7 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
   private let progressBar = UIProgressView(progressViewStyle: .bar)
   private let progressLabel = UILabel()
   private let progressCard = UIView()
-  private let addButton = UIButton(type: .system)
+  private let collapseButton = UIButton(type: .system)
   private let syncBadge = UILabel()
 
   init(container: AppContainer) {
@@ -129,7 +149,7 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     mapView.showsCompass = false
     mapView.showsScale = true
     mapView.isRotateEnabled = false
-    mapView.layoutMargins = UIEdgeInsets(top: 0, left: 0, bottom: 132, right: 0)
+    updateMapLayoutMargins()
     mapView.setRegion(
       MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 35.8617, longitude: 104.1954),
@@ -146,14 +166,7 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     searchCard.layer.borderWidth = 1
     searchCard.layer.borderColor = UIColor.separator.withAlphaComponent(0.16).cgColor
 
-    let iconView = IconBadgeView(symbol: "magnifyingglass", tint: .label, background: .tertiarySystemGroupedBackground)
-    let menuButton = UIButton(type: .system)
-    menuButton.setImage(UIImage(systemName: "line.3.horizontal"), for: .normal)
-    menuButton.tintColor = .label
-    menuButton.backgroundColor = .tertiarySystemGroupedBackground
-    menuButton.layer.cornerRadius = 10
-    menuButton.layer.cornerCurve = .continuous
-    menuButton.addTarget(self, action: #selector(showHomeMenu), for: .touchUpInside)
+    let iconView = IconBadgeView(symbol: "globe.asia.australia", tint: .label, background: .tertiarySystemGroupedBackground)
 
     searchTitleLabel.font = .systemFont(ofSize: 17, weight: .bold)
     searchTitleLabel.textColor = .label
@@ -166,20 +179,16 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     labelStack.axis = .vertical
     labelStack.spacing = 1
 
-    let content = UIStackView(arrangedSubviews: [iconView, labelStack, menuButton])
+    let content = UIStackView(arrangedSubviews: [iconView, labelStack])
     content.translatesAutoresizingMaskIntoConstraints = false
     content.axis = .horizontal
     content.alignment = .center
     content.spacing = 9
     searchCard.contentView.addSubview(content)
-    let searchTap = UITapGestureRecognizer(target: self, action: #selector(openLibrary))
-    searchCard.addGestureRecognizer(searchTap)
 
     NSLayoutConstraint.activate([
       iconView.widthAnchor.constraint(equalToConstant: 30),
       iconView.heightAnchor.constraint(equalToConstant: 30),
-      menuButton.widthAnchor.constraint(equalToConstant: 32),
-      menuButton.heightAnchor.constraint(equalToConstant: 32),
       content.topAnchor.constraint(equalTo: searchCard.contentView.topAnchor, constant: 8),
       content.leadingAnchor.constraint(equalTo: searchCard.contentView.leadingAnchor, constant: 10),
       content.trailingAnchor.constraint(equalTo: searchCard.contentView.trailingAnchor, constant: -10),
@@ -214,13 +223,9 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     toolStack.spacing = 8
     let center = MapToolButton(symbol: "scope")
     center.addTarget(self, action: #selector(centerMap), for: .touchUpInside)
-    let layer = MapToolButton(symbol: "map")
+    let layer = MapToolButton(symbol: "square.2.layers.3d")
     layer.addTarget(self, action: #selector(toggleMapType), for: .touchUpInside)
-    let fit = MapToolButton(symbol: "rectangle.3.group")
-    fit.addTarget(self, action: #selector(fitAnnotationsFromButton), for: .touchUpInside)
-    let organize = MapToolButton(symbol: "square.grid.3x3")
-    organize.addTarget(self, action: #selector(openOrganize), for: .touchUpInside)
-    [center, layer, fit, organize].forEach { toolStack.addArrangedSubview($0) }
+    [center, layer].forEach { toolStack.addArrangedSubview($0) }
   }
 
   private func configureWorkbenchPanel() {
@@ -229,11 +234,14 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     workbenchPanel.clipsToBounds = true
     workbenchPanel.layer.borderWidth = 1
     workbenchPanel.layer.borderColor = UIColor.separator.withAlphaComponent(0.16).cgColor
+    searchCard.contentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openLibraryFromWorkbench)))
 
     let grabber = UIView()
     grabber.translatesAutoresizingMaskIntoConstraints = false
     grabber.backgroundColor = .tertiaryLabel
     grabber.layer.cornerRadius = 2.5
+    grabber.isUserInteractionEnabled = true
+    grabber.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(toggleWorkbenchCollapsed)))
 
     let titleLabel = UILabel()
     titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
@@ -260,15 +268,16 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     syncBadge.clipsToBounds = true
     syncBadge.text = "同步中"
 
-    var addConfig = UIButton.Configuration.filled()
-    addConfig.image = UIImage(systemName: "plus")
-    addConfig.baseBackgroundColor = UIColor(red: 0.06, green: 0.16, blue: 0.20, alpha: 1)
-    addConfig.baseForegroundColor = .white
-    addConfig.cornerStyle = .large
-    addButton.configuration = addConfig
-    addButton.addTarget(self, action: #selector(openLibrary), for: .touchUpInside)
+    var collapseConfig = UIButton.Configuration.filled()
+    collapseConfig.image = UIImage(systemName: "chevron.down")
+    collapseConfig.baseBackgroundColor = .tertiarySystemGroupedBackground
+    collapseConfig.baseForegroundColor = .label
+    collapseConfig.cornerStyle = .large
+    collapseButton.configuration = collapseConfig
+    collapseButton.accessibilityLabel = "收起地图工作台"
+    collapseButton.addTarget(self, action: #selector(toggleWorkbenchCollapsed), for: .touchUpInside)
 
-    let header = UIStackView(arrangedSubviews: [titleStack, syncBadge, addButton])
+    let header = UIStackView(arrangedSubviews: [titleStack, syncBadge, collapseButton])
     header.translatesAutoresizingMaskIntoConstraints = false
     header.axis = .horizontal
     header.alignment = .center
@@ -285,8 +294,12 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     filterStack.axis = .horizontal
     filterStack.distribution = .fillEqually
     filterStack.spacing = 5
-    ["覆盖", "可信", "授权", "WGS84"].enumerated().forEach { index, title in
-      filterStack.addArrangedSubview(FilterChipButton(title: title, selected: index == 0, compact: true))
+    WorkbenchFacet.allCases.forEach { facet in
+      let button = FilterChipButton(title: facet.title, selected: facet == selectedFacet, compact: true)
+      button.tag = facet.rawValue
+      button.addTarget(self, action: #selector(facetTapped(_:)), for: .touchUpInside)
+      facetButtons.append(button)
+      filterStack.addArrangedSubview(button)
     }
 
     queueStack.axis = .vertical
@@ -308,6 +321,8 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     progressCard.backgroundColor = UIColor(red: 0.07, green: 0.16, blue: 0.20, alpha: 1)
     progressCard.layer.cornerRadius = 12
     progressCard.layer.cornerCurve = .continuous
+    progressCard.isUserInteractionEnabled = true
+    progressCard.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openOrganizeFromWorkbench)))
 
     let progressStack = UIStackView(arrangedSubviews: [progressLabel, progressBar])
     progressStack.translatesAutoresizingMaskIntoConstraints = false
@@ -352,6 +367,7 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     content.axis = .vertical
     content.spacing = 8
     workbenchPanel.contentView.addSubview(content)
+    collapsibleWorkbenchViews = [metricStack, body]
 
     NSLayoutConstraint.activate([
       grabber.widthAnchor.constraint(equalToConstant: 42),
@@ -359,8 +375,8 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
       grabber.centerXAnchor.constraint(equalTo: content.centerXAnchor),
       syncBadge.widthAnchor.constraint(equalToConstant: 50),
       syncBadge.heightAnchor.constraint(equalToConstant: 28),
-      addButton.widthAnchor.constraint(equalToConstant: 38),
-      addButton.heightAnchor.constraint(equalToConstant: 38),
+      collapseButton.widthAnchor.constraint(equalToConstant: 38),
+      collapseButton.heightAnchor.constraint(equalToConstant: 38),
       metricStack.heightAnchor.constraint(equalToConstant: 51),
       filterStack.heightAnchor.constraint(equalToConstant: 30),
       dataGrid.heightAnchor.constraint(equalToConstant: 101),
@@ -378,11 +394,56 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     ])
   }
 
+  @objc private func toggleWorkbenchCollapsed() {
+    setWorkbenchCollapsed(!isWorkbenchCollapsed, animated: true)
+  }
+
+  private func setWorkbenchCollapsed(_ collapsed: Bool, animated: Bool) {
+    guard collapsed != isWorkbenchCollapsed else { return }
+    isWorkbenchCollapsed = collapsed
+    container.haptics.selectionChanged()
+    updateWorkbenchCollapseState(animated: animated)
+  }
+
+  private func updateWorkbenchCollapseState(animated: Bool) {
+    let changes = {
+      self.collapsibleWorkbenchViews.forEach { $0.isHidden = self.isWorkbenchCollapsed }
+      self.updateCollapseButton()
+      self.updateMapLayoutMargins()
+      self.view.layoutIfNeeded()
+    }
+    if animated {
+      UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseInOut, .allowUserInteraction], animations: changes) { _ in
+        self.fitAnnotationsIfNeededAfterPanelChange()
+      }
+    } else {
+      changes()
+      fitAnnotationsIfNeededAfterPanelChange()
+    }
+  }
+
+  private func updateCollapseButton() {
+    var config = collapseButton.configuration ?? UIButton.Configuration.filled()
+    config.image = UIImage(systemName: isWorkbenchCollapsed ? "chevron.up" : "chevron.down")
+    collapseButton.configuration = config
+    collapseButton.accessibilityLabel = isWorkbenchCollapsed ? "展开地图工作台" : "收起地图工作台"
+  }
+
+  private func updateMapLayoutMargins() {
+    mapView.layoutMargins = UIEdgeInsets(top: 0, left: 0, bottom: isWorkbenchCollapsed ? 82 : 260, right: 0)
+  }
+
+  private func fitAnnotationsIfNeededAfterPanelChange() {
+    guard !mapView.annotations.isEmpty || !mapView.overlays.isEmpty else { return }
+    fitAnnotations(animated: true)
+  }
+
   private func reloadData() {
     records = container.store.loadRecords()
-    queueRecords = filteredRecords().sorted(by: prioritySort).prefix(3).map { $0 }
+    queueRecords = facetedRecords(from: filteredRecords()).sorted(by: prioritySort).prefix(3).map { $0 }
     updateMetrics()
     updateChips()
+    updateFacets()
     updateQueue()
     updateDataGrid()
     updateMapAnnotations()
@@ -396,12 +457,18 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     let conflicts = records.filter { isLocationMissing($0) && isYearMissing($0) }.count
     let locatedPercent = total == 0 ? 0 : Int((Double(located) / Double(total) * 100).rounded())
 
-    [
+    let metricItems = [
       ("\(compact(total))", "地图条目"),
       ("\(locatedPercent)%", "已定位"),
       ("\(pendingOCR)", "待 OCR"),
       ("\(conflicts)", "冲突集")
-    ].forEach { metricStack.addArrangedSubview(MetricTileView(value: $0.0, label: $0.1)) }
+    ]
+    metricItems.enumerated().forEach { index, item in
+      let tile = MetricTileView(value: item.0, label: item.1)
+      tile.tag = index
+      tile.addTarget(self, action: #selector(metricTapped(_:)), for: .touchUpInside)
+      metricStack.addArrangedSubview(tile)
+    }
   }
 
   private func updateChips() {
@@ -418,10 +485,20 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     }
   }
 
+  private func updateFacets() {
+    let base = filteredRecords()
+    for button in facetButtons {
+      guard let facet = WorkbenchFacet(rawValue: button.tag) else { continue }
+      button.setSelected(facet == selectedFacet)
+      let count = facetedRecords(from: base, facet: facet).count
+      button.updateTitle("\(facet.title) \(count)")
+    }
+  }
+
   private func updateQueue() {
     queueStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
     if queueRecords.isEmpty {
-      queueStack.addArrangedSubview(QueueRowView(title: "暂无待整理地图", subtitle: "从库中导入地图后，这里显示缺地区、缺年代或待 OCR 条目", badge: "空", priority: false))
+      queueStack.addArrangedSubview(QueueRowView(title: "暂无匹配地图", subtitle: "切换上方筛选，或到图库导入/整理地图元数据", badge: "空", priority: false))
       let spacer = UIView()
       spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
       queueStack.addArrangedSubview(spacer)
@@ -453,14 +530,17 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     progressLabel.text = records.isEmpty ? "等待导入" : "校准完成 \(Int((calibrationProgress * 100).rounded()))%"
     progressBar.progress = Float(calibrationProgress)
 
-    let row1 = UIStackView(arrangedSubviews: [
-      DataTileView(value: "\(max(countries, records.isEmpty ? 0 : 1))", label: "国家"),
-      DataTileView(value: "\(max(regions, records.isEmpty ? 0 : 1))", label: "区域")
-    ])
-    let row2 = UIStackView(arrangedSubviews: [
-      DataTileView(value: "9", label: "坐标系"),
-      DataTileView(value: records.isEmpty ? "0G" : "\(gb)G", label: "离线包")
-    ])
+    let countryTile = DataTileView(value: "\(max(countries, records.isEmpty ? 0 : 1))", label: "国家")
+    countryTile.addTarget(self, action: #selector(openLibraryFromWorkbench), for: .touchUpInside)
+    let regionTile = DataTileView(value: "\(max(regions, records.isEmpty ? 0 : 1))", label: "区域")
+    regionTile.addTarget(self, action: #selector(selectLocatedFromDataTile), for: .touchUpInside)
+    let coordinateTile = DataTileView(value: "9", label: "坐标系")
+    coordinateTile.addTarget(self, action: #selector(selectWGS84FromDataTile), for: .touchUpInside)
+    let offlineTile = DataTileView(value: records.isEmpty ? "0G" : "\(gb)G", label: "离线包")
+    offlineTile.addTarget(self, action: #selector(openLibraryFromWorkbench), for: .touchUpInside)
+
+    let row1 = UIStackView(arrangedSubviews: [countryTile, regionTile])
+    let row2 = UIStackView(arrangedSubviews: [coordinateTile, offlineTile])
     [row1, row2].forEach {
       $0.axis = .horizontal
       $0.distribution = .fillEqually
@@ -472,7 +552,8 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
   private func updateMapAnnotations() {
     mapView.removeAnnotations(mapView.annotations)
     mapView.removeOverlays(mapView.overlays)
-    let annotations = records.compactMap { record -> MapRecordAnnotation? in
+    let visibleMapRecords = filteredRecords()
+    let annotations = visibleMapRecords.compactMap { record -> MapRecordAnnotation? in
       guard let center = coverageCenter(for: record) else { return nil }
       if let polygon = coveragePolygon(for: record) {
         mapView.addOverlay(polygon)
@@ -481,7 +562,9 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
       return MapRecordAnnotation(record: record, coordinate: center, representsCoverageArea: false)
     }
     mapView.addAnnotations(annotations)
-    if !annotations.isEmpty {
+    if annotations.isEmpty {
+      resetMapRegion(animated: false)
+    } else {
       fitAnnotations(animated: false)
     }
   }
@@ -496,6 +579,20 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
       return records.filter(isOCRMissing)
     case .favorite:
       return records.filter(\.favorite)
+    }
+  }
+
+  private func facetedRecords(from source: [MapRecord], facet: WorkbenchFacet? = nil) -> [MapRecord] {
+    let facet = facet ?? selectedFacet
+    switch facet {
+    case .coverage:
+      return source.filter { isLocationMissing($0) || ($0.coverageOutline?.count ?? 0) < 3 }
+    case .reliable:
+      return source.filter { isOCRMissing($0) || String($0.description).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    case .authorization:
+      return source.filter { String($0.securityLevel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    case .wgs84:
+      return source.filter { coverageBounds(for: $0) == nil || $0.latitude == nil || $0.longitude == nil }
     }
   }
 
@@ -575,21 +672,63 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     navigationController?.pushViewController(detail, animated: true)
   }
 
-  @objc private func openLibrary() {
-    container.haptics.softTap()
-    tabBarController?.selectedIndex = 1
-  }
-
-  @objc private func openOrganize() {
-    container.haptics.softTap()
-    tabBarController?.selectedIndex = 2
-  }
-
   @objc private func filterTapped(_ sender: UIButton) {
     guard let filter = WorkbenchFilter(rawValue: sender.tag) else { return }
     selectedFilter = filter
     container.haptics.selectionChanged()
     reloadData()
+  }
+
+  @objc private func facetTapped(_ sender: UIButton) {
+    guard let facet = WorkbenchFacet(rawValue: sender.tag) else { return }
+    selectedFacet = facet
+    container.haptics.selectionChanged()
+    reloadData()
+  }
+
+  @objc private func metricTapped(_ sender: UIControl) {
+    switch sender.tag {
+    case 0:
+      openLibraryFromWorkbench()
+    case 1:
+      selectedFilter = .located
+      selectedFacet = .coverage
+      container.haptics.selectionChanged()
+      reloadData()
+    case 2:
+      selectedFilter = .pendingOCR
+      selectedFacet = .reliable
+      container.haptics.selectionChanged()
+      reloadData()
+    default:
+      selectedFilter = .pending
+      selectedFacet = .coverage
+      container.haptics.selectionChanged()
+      reloadData()
+    }
+  }
+
+  @objc private func selectLocatedFromDataTile() {
+    selectedFilter = .located
+    container.haptics.selectionChanged()
+    reloadData()
+  }
+
+  @objc private func selectWGS84FromDataTile() {
+    selectedFilter = .pending
+    selectedFacet = .wgs84
+    container.haptics.selectionChanged()
+    reloadData()
+  }
+
+  @objc private func openLibraryFromWorkbench() {
+    container.haptics.softTap()
+    tabBarController?.selectedIndex = 1
+  }
+
+  @objc private func openOrganizeFromWorkbench() {
+    container.haptics.softTap()
+    tabBarController?.selectedIndex = 2
   }
 
   @objc private func zoomInMap() {
@@ -615,23 +754,23 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     if !mapView.overlays.isEmpty || !mapView.annotations.isEmpty {
       fitAnnotations(animated: true)
     } else {
-      mapView.setRegion(
-        MKCoordinateRegion(
-          center: CLLocationCoordinate2D(latitude: 35.8617, longitude: 104.1954),
-          span: MKCoordinateSpan(latitudeDelta: 28, longitudeDelta: 38)
-        ),
-        animated: true
-      )
+      resetMapRegion(animated: true)
     }
+  }
+
+  private func resetMapRegion(animated: Bool) {
+    mapView.setRegion(
+      MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 35.8617, longitude: 104.1954),
+        span: MKCoordinateSpan(latitudeDelta: 28, longitudeDelta: 38)
+      ),
+      animated: animated
+    )
   }
 
   @objc private func toggleMapType() {
     container.haptics.selectionChanged()
     mapView.mapType = mapView.mapType == .mutedStandard ? .hybridFlyover : .mutedStandard
-  }
-
-  @objc private func fitAnnotationsFromButton() {
-    fitAnnotations(animated: true)
   }
 
   private func fitAnnotations(animated: Bool) {
@@ -650,23 +789,9 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     }
     mapView.setVisibleMapRect(
       rect,
-      edgePadding: UIEdgeInsets(top: 170, left: 64, bottom: 420, right: 88),
+      edgePadding: UIEdgeInsets(top: 170, left: 64, bottom: isWorkbenchCollapsed ? 150 : 420, right: 88),
       animated: animated
     )
-  }
-
-  @objc private func showHomeMenu() {
-    container.haptics.softTap()
-    let alert = UIAlertController(title: "地图工作台", message: nil, preferredStyle: .actionSheet)
-    alert.addAction(UIAlertAction(title: "打开图库", style: .default) { [weak self] _ in self?.openLibrary() })
-    alert.addAction(UIAlertAction(title: "打开整理队列", style: .default) { [weak self] _ in self?.openOrganize() })
-    alert.addAction(UIAlertAction(title: mapView.mapType == .mutedStandard ? "切换卫星图" : "切换标准图", style: .default) { [weak self] _ in self?.toggleMapType() })
-    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-    if let popover = alert.popoverPresentationController {
-      popover.sourceView = searchCard
-      popover.sourceRect = searchCard.bounds
-    }
-    present(alert, animated: true)
   }
 
   func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
@@ -886,7 +1011,7 @@ private final class FilterChipButton: UIButton {
   }
 }
 
-private final class MetricTileView: UIView {
+private final class MetricTileView: UIControl {
   init(value: String, label: String) {
     super.init(frame: .zero)
     backgroundColor = .systemBackground.withAlphaComponent(0.72)
@@ -901,6 +1026,7 @@ private final class MetricTileView: UIView {
     stack.translatesAutoresizingMaskIntoConstraints = false
     stack.axis = .vertical
     stack.spacing = 4
+    stack.isUserInteractionEnabled = false
     addSubview(stack)
     NSLayoutConstraint.activate([
       stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
@@ -912,6 +1038,12 @@ private final class MetricTileView: UIView {
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  override var isHighlighted: Bool {
+    didSet {
+      alpha = isHighlighted ? 0.72 : 1
+    }
   }
 }
 
@@ -1005,7 +1137,7 @@ private final class QueueRowView: UIControl {
   }
 }
 
-private final class DataTileView: UIView {
+private final class DataTileView: UIControl {
   init(value: String, label: String) {
     super.init(frame: .zero)
     backgroundColor = .secondarySystemGroupedBackground.withAlphaComponent(0.78)
@@ -1025,6 +1157,7 @@ private final class DataTileView: UIView {
     stack.translatesAutoresizingMaskIntoConstraints = false
     stack.axis = .vertical
     stack.spacing = 5
+    stack.isUserInteractionEnabled = false
     addSubview(stack)
 
     NSLayoutConstraint.activate([
@@ -1038,5 +1171,11 @@ private final class DataTileView: UIView {
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  override var isHighlighted: Bool {
+    didSet {
+      alpha = isHighlighted ? 0.72 : 1
+    }
   }
 }

@@ -1,0 +1,23 @@
+{
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/App/AppDelegate.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.dia",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppDelegate.swiftdeps"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Features/Backup/BackupViewController.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.dia",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/BackupViewController.swiftdeps"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/AppSettings.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.dia",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppSettings.swiftdeps"
+  }
+}

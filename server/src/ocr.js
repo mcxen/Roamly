@@ -21,6 +21,10 @@ const runtime = {
   processing: false,
   queue: [],
   queueSet: new Set(),
+  engine: (process.env.OCR_ENGINE || 'auto').toLowerCase(),
+  appleVisionPath: process.env.APPLE_VISION_PATH || '/usr/local/bin/apple-vision',
+  appleVisionAvailable: false,
+  tesseractAvailable: false,
   lang: process.env.OCR_LANG || 'chi_sim+eng',
   lastError: '',
   workerSource: null
@@ -113,7 +117,7 @@ const detectCountryMentions = (text) => {
   return found;
 };
 
-const detectTesseract = async () => {
+const detectOcrEngines = async () => {
   if (!runtime.enabled) {
     runtime.available = false;
     return false;
@@ -122,18 +126,41 @@ const detectTesseract = async () => {
   if (runtime.checking) return runtime.available;
   runtime.checking = true;
 
+  const errors = [];
+  runtime.appleVisionAvailable = false;
+  runtime.tesseractAvailable = false;
+
+  try {
+    await execFileAsync(runtime.appleVisionPath, ['--help'], { timeout: 6000 });
+    runtime.appleVisionAvailable = true;
+  } catch (err) {
+    errors.push(`apple-vision: ${err.message}`);
+  }
+
   try {
     await execFileAsync('tesseract', ['--version'], { timeout: 6000 });
-    runtime.available = true;
-    runtime.lastError = '';
+    runtime.tesseractAvailable = true;
   } catch (err) {
-    runtime.available = false;
-    runtime.lastError = err.message;
+    errors.push(`tesseract: ${err.message}`);
   } finally {
+    runtime.available = runtime.engine === 'apple-vision'
+      ? runtime.appleVisionAvailable
+      : runtime.engine === 'tesseract'
+        ? runtime.tesseractAvailable
+        : runtime.appleVisionAvailable || runtime.tesseractAvailable;
+    runtime.lastError = runtime.available ? '' : errors.join('; ');
     runtime.checking = false;
   }
 
   return runtime.available;
+};
+
+const pickOcrEngine = () => {
+  if (runtime.engine === 'apple-vision') return runtime.appleVisionAvailable ? 'apple-vision' : '';
+  if (runtime.engine === 'tesseract') return runtime.tesseractAvailable ? 'tesseract' : '';
+  if (runtime.appleVisionAvailable) return 'apple-vision';
+  if (runtime.tesseractAvailable) return 'tesseract';
+  return '';
 };
 
 const fetchCandidates = ({ force = false, limit = 100 } = {}) => {
@@ -184,19 +211,68 @@ const readWebdavToTempFile = async (remotePath) => {
   return tempPath;
 };
 
-const recognizeImageText = async ({ source, imagePath }) => {
-  let actualPath = imagePath;
-  let cleanupPath = '';
-
-  if (source === 'webdav') {
-    actualPath = await readWebdavToTempFile(imagePath);
-    cleanupPath = actualPath;
+const collectStrings = (value, output = []) => {
+  if (typeof value === 'string') {
+    const text = normalizeText(value);
+    if (text) output.push(text);
+    return output;
   }
-
-  if (!fs.existsSync(actualPath)) {
-    throw new Error(`image_missing:${actualPath}`);
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectStrings(item, output);
+    }
+    return output;
   }
+  if (value && typeof value === 'object') {
+    for (const key of ['text', 'value', 'label', 'identifier', 'name', 'payloadStringValue']) {
+      if (typeof value[key] === 'string') {
+        const text = normalizeText(value[key]);
+        if (text) output.push(text);
+      }
+    }
+    for (const key of ['ocr', 'textObservations', 'texts', 'classification', 'classifications', 'labels', 'faces', 'barcodes', 'results']) {
+      if (value[key]) collectStrings(value[key], output);
+    }
+  }
+  return output;
+};
 
+const parseAppleVisionOutput = (stdout) => {
+  const raw = String(stdout || '').trim();
+  if (!raw) return { text: '', blocks: [] };
+
+  try {
+    const parsed = JSON.parse(raw);
+    const entries = collectStrings(parsed);
+    return {
+      text: normalizeText([...new Set(entries)].join(' ')),
+      blocks: []
+    };
+  } catch {
+    const lines = raw
+      .split(/\r?\n/)
+      .map((line) => normalizeText(line))
+      .filter(Boolean)
+      .filter((line) => !/^(ocr|classification|classifications|faces|barcodes)\b[:：]?$/iu.test(line));
+
+    return {
+      text: normalizeText([...new Set(lines)].join(' ')),
+      blocks: []
+    };
+  }
+};
+
+const recognizeWithAppleVision = async (actualPath) => {
+  const { stdout } = await execFileAsync(runtime.appleVisionPath, ['analyze', actualPath], {
+    maxBuffer: 24 * 1024 * 1024,
+    timeout: 120000
+  });
+  const result = parseAppleVisionOutput(stdout);
+  runtime.workerSource = 'apple-vision';
+  return result;
+};
+
+const recognizeWithTesseract = async (actualPath) => {
   const tempBasePath = path.resolve(
     os.tmpdir(),
     `roamly-ocr-${crypto.randomBytes(8).toString('hex')}`
@@ -257,9 +333,43 @@ const recognizeImageText = async ({ source, imagePath }) => {
       .filter((item) => item.confidence >= 20);
 
     const text = normalizeText(blocks.map((item) => item.text).join(' '));
+    runtime.workerSource = 'tesseract';
     return { text, blocks };
   } finally {
     await fsp.unlink(`${tempBasePath}.tsv`).catch(() => {});
+  }
+};
+
+const recognizeImageText = async ({ source, imagePath }) => {
+  let actualPath = imagePath;
+  let cleanupPath = '';
+
+  if (source === 'webdav') {
+    actualPath = await readWebdavToTempFile(imagePath);
+    cleanupPath = actualPath;
+  }
+
+  if (!fs.existsSync(actualPath)) {
+    throw new Error(`image_missing:${actualPath}`);
+  }
+
+  try {
+    const engine = pickOcrEngine();
+    if (engine === 'apple-vision') {
+      try {
+        return await recognizeWithAppleVision(actualPath);
+      } catch (err) {
+        if (runtime.engine === 'apple-vision' || !runtime.tesseractAvailable) {
+          throw err;
+        }
+        logger.warn({ err, imagePath: actualPath }, 'apple-vision failed, falling back to tesseract');
+      }
+    }
+    if (runtime.tesseractAvailable) {
+      return await recognizeWithTesseract(actualPath);
+    }
+    throw new Error('ocr_engine_unavailable');
+  } finally {
     if (cleanupPath) {
       await fsp.unlink(cleanupPath).catch(() => {});
     }
@@ -516,7 +626,17 @@ const processQueue = async () => {
         district: mergedLocation.district,
         latitude: mergedLocation.latitude,
         longitude: mergedLocation.longitude,
+        north_latitude: latest.north_latitude,
+        south_latitude: latest.south_latitude,
+        east_longitude: latest.east_longitude,
+        west_longitude: latest.west_longitude,
+        coverage_outline: latest.coverage_outline ? JSON.stringify(latest.coverage_outline) : null,
         year_label: latest.year_label,
+        campaign: latest.campaign,
+        teaching_use: latest.teaching_use,
+        teaching_note: latest.teaching_note,
+        security_level: latest.security_level,
+        storage_band: latest.storage_band,
         updated_at: nowIso()
       };
 
@@ -595,11 +715,16 @@ const enqueue = (id) => {
 };
 
 export const initOcrService = async () => {
-  const available = await detectTesseract();
+  const available = await detectOcrEngines();
   if (!available) {
-    logger.warn('OCR unavailable: tesseract not found, OCR search disabled');
+    logger.warn({ error: runtime.lastError }, 'OCR unavailable: apple-vision/tesseract not found, OCR search disabled');
     return;
   }
+  logger.info({
+    appleVision: runtime.appleVisionAvailable,
+    tesseract: runtime.tesseractAvailable,
+    engine: pickOcrEngine()
+  }, 'OCR engine ready');
 
   queueOcrForCandidates({ force: false, limit: 80 });
 };
@@ -634,6 +759,9 @@ export const queueOcrForMapIds = (ids = []) => {
 export const getOcrStatus = () => ({
   enabled: runtime.enabled,
   available: runtime.available,
+  engine: pickOcrEngine(),
+  appleVisionAvailable: runtime.appleVisionAvailable,
+  tesseractAvailable: runtime.tesseractAvailable,
   processing: runtime.processing,
   queueSize: runtime.queue.length,
   lang: runtime.lang,

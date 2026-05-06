@@ -545,43 +545,44 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
     manualProgressValue = 0.05
     lastOCRStatusMessage = "正在执行批量 OCR…"
     refreshProgressSummary()
-    let progress = UIAlertController(title: "正在 OCR", message: "准备中…", preferredStyle: .alert)
-    present(progress, animated: true)
+    container.aiProgressCenter.start(title: "OCR 批量识别", totalUnits: max(ids.count, 1))
+    var completedProgressUnits = 0
 
     do {
       let result = try await container.ocrIndexService.indexRecords(ids: ids) { message in
         Task { @MainActor in
-          progress.message = message
+          completedProgressUnits += 1
+          self.container.aiProgressCenter.update(message: message, completedUnits: completedProgressUnits)
           self.lastOCRStatusMessage = message
           self.manualProgressValue = min(self.manualProgressValue + 0.12, 0.92)
           self.refreshProgressSummary()
         }
       }
-      progress.dismiss(animated: true) {
-        self.container.haptics.success()
-        self.lastOCRStatusMessage = "OCR 完成，已处理 \(result.processedCount) 张地图。"
-        self.manualProgressValue = 1
-        self.reloadData()
-        let touched = result.updatedRecords.filter { ids.contains($0.id) }
-        Task { [weak self] in
-          guard let self else { return }
-          await self.syncBatchMetadata(
-            title: "OCR 完成",
-            touchedRecords: touched,
-            affectedCount: result.processedCount
-          )
-        }
+      container.haptics.success()
+      let doneMessage = "OCR 完成，已处理 \(result.processedCount) 张地图。"
+      container.aiProgressCenter.finish(message: doneMessage)
+      lastOCRStatusMessage = doneMessage
+      manualProgressValue = 1
+      reloadData()
+      let touched = result.updatedRecords.filter { ids.contains($0.id) }
+      Task { [weak self] in
+        guard let self else { return }
+        await self.syncBatchMetadata(
+          title: "OCR 完成",
+          touchedRecords: touched,
+          affectedCount: result.processedCount
+        )
       }
     } catch {
-      progress.dismiss(animated: true) {
-        self.container.haptics.error()
-        self.lastOCRStatusMessage = "OCR 失败：\(error.localizedDescription)"
-        self.manualProgressValue = 0
-        self.refreshProgressSummary()
-        let alert = UIAlertController(title: "OCR 失败", message: error.localizedDescription, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "知道了", style: .default))
-        self.present(alert, animated: true)
-      }
+      container.haptics.error()
+      let failedMessage = "OCR 失败：\(error.localizedDescription)"
+      container.aiProgressCenter.fail(message: failedMessage)
+      lastOCRStatusMessage = failedMessage
+      manualProgressValue = 0
+      refreshProgressSummary()
+      let alert = UIAlertController(title: "OCR 失败", message: error.localizedDescription, preferredStyle: .alert)
+      alert.addAction(UIAlertAction(title: "知道了", style: .default))
+      present(alert, animated: true)
     }
   }
 
@@ -594,7 +595,7 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
 
     container.haptics.mediumTap()
 
-    let alert = UIAlertController(title: "AI 批量整理", message: "将对已选地图执行 AI 元数据编目，并要求模型返回 JSON。", preferredStyle: .alert)
+    let alert = UIAlertController(title: "AI 批量整理", message: "将对已选地图分步提取基础信息、经纬度范围和缩略图轮廓。", preferredStyle: .alert)
     alert.addAction(UIAlertAction(title: "取消", style: .cancel))
     alert.addAction(UIAlertAction(title: "开始", style: .default) { [weak self] _ in
       guard let self else { return }
@@ -611,43 +612,44 @@ final class OrganizeViewController: UIViewController, UITableViewDataSource, UIT
     manualProgressValue = 0.05
     lastAIStatusMessage = "正在执行 AI 编目…"
     refreshProgressSummary()
-    let progress = UIAlertController(title: "正在 AI 整理", message: "准备中…", preferredStyle: .alert)
-    present(progress, animated: true)
+    container.aiProgressCenter.start(title: "AI 批量整理", totalUnits: max(ids.count * 3, 1))
+    var completedProgressUnits = 0
 
     do {
       let result = try await container.aiMetadataService.organizeRecords(ids: ids) { message in
         Task { @MainActor in
-          progress.message = message
+          completedProgressUnits += 1
+          self.container.aiProgressCenter.update(message: message, completedUnits: completedProgressUnits)
           self.lastAIStatusMessage = message
           self.manualProgressValue = min(self.manualProgressValue + 0.12, 0.92)
           self.refreshProgressSummary()
         }
       }
-      progress.dismiss(animated: true) {
-        self.container.haptics.success()
-        self.lastAIStatusMessage = "AI 编目完成，已更新 \(result.processedCount) 张地图。"
-        self.manualProgressValue = 1
-        self.reloadData()
-        let touched = result.updatedRecords.filter { ids.contains($0.id) }
-        Task { [weak self] in
-          guard let self else { return }
-          await self.syncBatchMetadata(
-            title: "AI 编目完成",
-            touchedRecords: touched,
-            affectedCount: result.processedCount
-          )
-        }
+      container.haptics.success()
+      let doneMessage = "AI 编目完成，已更新 \(result.processedCount) 张地图。"
+      container.aiProgressCenter.finish(message: doneMessage)
+      lastAIStatusMessage = doneMessage
+      manualProgressValue = 1
+      reloadData()
+      let touched = result.updatedRecords.filter { ids.contains($0.id) }
+      Task { [weak self] in
+        guard let self else { return }
+        await self.syncBatchMetadata(
+          title: "AI 编目完成",
+          touchedRecords: touched,
+          affectedCount: result.processedCount
+        )
       }
     } catch {
-      progress.dismiss(animated: true) {
-        self.container.haptics.error()
-        self.lastAIStatusMessage = "AI 编目失败：\(error.localizedDescription)"
-        self.manualProgressValue = 0
-        self.refreshProgressSummary()
-        let alert = UIAlertController(title: "AI 编目失败", message: error.localizedDescription, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "知道了", style: .default))
-        self.present(alert, animated: true)
-      }
+      container.haptics.error()
+      let failedMessage = "AI 编目失败：\(error.localizedDescription)"
+      container.aiProgressCenter.fail(message: failedMessage)
+      lastAIStatusMessage = failedMessage
+      manualProgressValue = 0
+      refreshProgressSummary()
+      let alert = UIAlertController(title: "AI 编目失败", message: error.localizedDescription, preferredStyle: .alert)
+      alert.addAction(UIAlertAction(title: "知道了", style: .default))
+      present(alert, animated: true)
     }
   }
 

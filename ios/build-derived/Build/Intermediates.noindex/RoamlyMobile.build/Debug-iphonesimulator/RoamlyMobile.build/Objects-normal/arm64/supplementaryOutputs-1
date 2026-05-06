@@ -1,0 +1,23 @@
+{
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/AIMetadataService.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.dia",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AIMetadataService.swiftdeps"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/APIClient.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.dia",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/APIClient.swiftdeps"
+  },
+  "/Users/mcx/Documents/OpenSpring/Roamly/ios/Sources/Services/AppContainer.swift" : {
+    "const-values" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.swiftconstvalues",
+    "dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.d",
+    "diagnostics" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.dia",
+    "object" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.o",
+    "swift-dependencies" : "/Users/mcx/Documents/OpenSpring/Roamly/ios/build-derived/Build/Intermediates.noindex/RoamlyMobile.build/Debug-iphonesimulator/RoamlyMobile.build/Objects-normal/arm64/AppContainer.swiftdeps"
+  }
+}
