@@ -1,7 +1,115 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AISettings from './AISettings.jsx';
+import { api } from '../api.js';
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+function RssSettings() {
+  const [form, setForm] = useState({ enabled: true, title: '', description: '' });
+  const [history, setHistory] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [genTask, setGenTask] = useState(null);
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    api.rssSettings().then((data) => {
+      setForm({ enabled: data.enabled ?? true, title: data.title || '', description: data.description || '' });
+      setHistory(data.history || []);
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.saveRssSettings(form);
+      setMsg('已保存');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e) { setMsg(e.message); }
+    setSaving(false);
+  };
+
+  const generate = async () => {
+    try {
+      const data = await api.rssGenerate();
+      setGenTask({ taskId: data.taskId, total: data.total, completed: 0, status: 'running' });
+      pollRef.current = setInterval(async () => {
+        try {
+          const t = await api.aiTaskStatus(data.taskId);
+          setGenTask({ taskId: data.taskId, total: t.total, completed: t.completed, status: t.status, errors: t.errors });
+          if (t.status === 'done') {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+            // Refresh history
+            const fresh = await api.rssSettings();
+            setHistory(fresh.history || []);
+          }
+        } catch (_) {}
+      }, 1500);
+    } catch (e) { setMsg(e.message); }
+  };
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const rssUrl = `${window.location.origin}/api/feed/rss`;
+
+  return (
+    <div className="settings-block">
+      <h4>RSS 订阅</h4>
+      <div className="settings-tip">启用后，可通过 RSS 阅读器订阅每日地图推荐（10 张/天，含 AI 描述）。</div>
+      <label className="settings-check">
+        <input type="checkbox" checked={form.enabled} onChange={(e) => setForm((p) => ({ ...p, enabled: e.target.checked }))} />
+        启用 RSS Feed
+      </label>
+      <label>
+        Feed 标题
+        <input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="Roamly 每日地图推荐" />
+      </label>
+      <label style={{ marginTop: 8 }}>
+        Feed 描述
+        <input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="每日精选 10 张历史地图" />
+      </label>
+      <div className="settings-actions">
+        <button onClick={save} disabled={saving}>{saving ? '保存中...' : '保存 RSS 设置'}</button>
+        <button onClick={generate} disabled={!form.enabled || (genTask?.status === 'running')}>
+          {genTask?.status === 'running' ? `AI 生成中 (${genTask.completed}/${genTask.total})` : '手动生成 (AI 描述)'}
+        </button>
+      </div>
+      {genTask?.status === 'running' && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ height: 4, borderRadius: 2, background: '#e2e8f0', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 2, background: '#0f172a', transition: 'width 0.3s', width: `${genTask.total ? (genTask.completed / genTask.total) * 100 : 0}%` }} />
+          </div>
+        </div>
+      )}
+      {genTask?.status === 'done' && (
+        <div className="settings-line success" style={{ marginTop: 6 }}>✓ 生成完成{genTask.errors ? `，${genTask.errors} 个失败` : ''}</div>
+      )}
+      {form.enabled && (
+        <div className="settings-line" style={{ marginTop: 8 }}>
+          订阅地址: <a href={rssUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', wordBreak: 'break-all' }}>{rssUrl}</a>
+        </div>
+      )}
+      {msg && <div className="settings-line success">{msg}</div>}
+      {history.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <h4 style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--muted)' }}>发布历史</h4>
+          <div style={{ maxHeight: 200, overflow: 'auto', fontSize: 12 }}>
+            {history.map((h, i) => (
+              <div key={i} style={{ padding: '4px 0', borderBottom: '1px dashed var(--line)' }}>
+                <span style={{ color: 'var(--muted)' }}>{new Date(h.date).toLocaleString()}</span>
+                <span style={{ marginLeft: 8 }}>{h.count} 张</span>
+                {h.titles?.length > 0 && <div style={{ color: '#475569', marginTop: 2 }}>{h.titles.join('、')}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 const normalizeDriver = (v) => (v === 'webdav' ? 'webdav' : v === 'server' ? 'server' : 'local');
 const BAND_COLORS = {
   red: '#ef4444', orange: '#f97316', yellow: '#eab308',
@@ -32,6 +140,7 @@ export default function SettingsDialog({
           <button className={tab === 'storage' ? 'active' : ''} onClick={() => setTab('storage')}>存储</button>
           <button className={tab === 'ai' ? 'active' : ''} onClick={() => setTab('ai')}>AI</button>
           <button className={tab === 'ocr' ? 'active' : ''} onClick={() => setTab('ocr')}>OCR</button>
+          <button className={tab === 'rss' ? 'active' : ''} onClick={() => setTab('rss')}>RSS</button>
         </div>
         <div className="settings-body">
           {tab === 'display' ? (
@@ -139,6 +248,8 @@ export default function SettingsDialog({
               {!ocrStatus?.available ? <div className="settings-tip">请先安装 tesseract（mac: `brew install tesseract tesseract-lang`）。</div> : null}
               <button onClick={handleOcrReindex} disabled={busy || !ocrStatus?.available}>重建 OCR 索引</button>
             </div>
+          ) : tab === 'rss' ? (
+            <RssSettings />
           ) : null}
         </div>
       </div>

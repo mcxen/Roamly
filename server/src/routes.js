@@ -32,6 +32,9 @@ import {
   saveAIProviderConfig,
   deleteAIProviderConfig,
   activateAIProvider,
+  getRssSettings,
+  setRssSettings,
+  addRssHistory,
   setMapLibraryDir,
   setServerMapDir,
   setStorageDriver,
@@ -748,6 +751,37 @@ router.get('/ai/providers', (_req, res) => {
   });
 });
 
+router.get('/ai/provider-configs', (_req, res) => {
+  res.json({ ok: true, ...getAIProviderConfigs(false) });
+});
+
+router.post('/ai/provider-configs', (req, res) => {
+  try {
+    const data = saveAIProviderConfig(req.body || {});
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.delete('/ai/provider-configs/:id', (req, res) => {
+  try {
+    const data = deleteAIProviderConfig(req.params.id);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/ai/provider-configs/:id/activate', (req, res) => {
+  try {
+    const data = activateAIProvider(req.params.id);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/ai/models', async (req, res) => {
   try {
     const saved = getAISettings(true);
@@ -946,6 +980,64 @@ router.post('/ai/maps/batch-extract', async (req, res) => {
     logger.error({ err }, 'Batch AI extraction failed');
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ─── AI 任务进度追踪 ─────────────────────────────────────────────────────────
+const aiTasks = new Map();
+
+router.post('/ai/maps/batch-extract-async', async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const includeImage = req.body?.includeImage !== false;
+  if (!ids.length) {
+    return res.status(400).json({ ok: false, error: '请提供要提取的地图 ID 列表。' });
+  }
+  const taskId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const task = { id: taskId, total: Math.min(ids.length, 20), completed: 0, errors: 0, status: 'running', results: [], startedAt: Date.now() };
+  aiTasks.set(taskId, task);
+
+  // Run in background
+  (async () => {
+    const settings = getAISettings(true);
+    for (const id of ids.slice(0, 20)) {
+      try {
+        const row = statements.findById.get(id);
+        if (!row) { task.errors++; task.completed++; continue; }
+        const current = rowToMap(row);
+        const content = [{ type: 'text', text: makeAIPrompt(current) }];
+        if (includeImage) {
+          content.push({ type: 'image_url', image_url: { url: await makeAIImageDataURL(row) } });
+        }
+        const messages = [
+          { role: 'system', content: settings.systemPrompt || AI_SYSTEM_PROMPT },
+          { role: 'user', content }
+        ];
+        const data = await chatCompletion({ provider: settings.provider, apiUrl: settings.apiUrl, apiKey: settings.apiKey, model: settings.model, messages });
+        const parsed = parseAIJson(extractContent(data));
+        const updated = await persistAIMapMeta(id, parsed);
+        task.results.push({ id, title: updated.title || current.file_name });
+      } catch (err) {
+        task.errors++;
+        logger.error({ err, id }, 'Async AI extraction failed for item');
+      }
+      task.completed++;
+    }
+    task.status = 'done';
+    task.finishedAt = Date.now();
+    setTimeout(() => aiTasks.delete(taskId), 600000);
+  })();
+
+  res.json({ ok: true, taskId, total: task.total });
+});
+
+router.get('/ai/tasks/:taskId', (req, res) => {
+  const task = aiTasks.get(req.params.taskId);
+  if (!task) return res.status(404).json({ ok: false, error: '任务不存在或已过期' });
+  res.json({ ok: true, ...task });
+});
+
+router.get('/ai/tasks', (_req, res) => {
+  const list = [...aiTasks.values()].map(({ results, ...rest }) => rest);
+  res.json({ ok: true, tasks: list });
 });
 
 router.post('/ai/test', async (req, res) => {
@@ -1190,6 +1282,16 @@ router.get('/maps/stats', (req, res) => {
   `).all();
 
   res.json({ total, favorites, withOcr, withBounds, withCoords, withAI, storageBands, countries, decades });
+});
+
+router.get('/maps/random', (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+  const hasCoords = req.query.hasCoords === 'true';
+  let sql = 'SELECT * FROM maps';
+  if (hasCoords) sql += ' WHERE latitude IS NOT NULL AND longitude IS NOT NULL';
+  sql += ' ORDER BY RANDOM() LIMIT ?';
+  const rows = dbInstance.prepare(sql).all(limit);
+  res.json({ ok: true, items: rows.map(rowToMap) });
 });
 
 router.get('/maps/facets', (req, res) => {
@@ -1648,6 +1750,125 @@ router.get('/files/:id', (req, res) => {
       stream.pipe(res);
     })
     .catch(() => sendOriginal());
+});
+
+// ─── RSS Feed ────────────────────────────────────────────────────────────────
+
+router.get('/rss/settings', (_req, res) => {
+  res.json({ ok: true, ...getRssSettings() });
+});
+
+router.post('/rss/settings', (req, res) => {
+  const data = setRssSettings(req.body || {});
+  res.json({ ok: true, ...data });
+});
+
+router.post('/rss/generate', (req, res) => {
+  const rss = getRssSettings();
+  if (!rss.enabled) return res.status(400).json({ ok: false, error: 'RSS 未启用' });
+
+  const rows = dbInstance.prepare('SELECT * FROM maps ORDER BY RANDOM() LIMIT 10').all();
+  const items = rows.map(rowToMap);
+  if (!items.length) return res.status(400).json({ ok: false, error: '无地图数据' });
+
+  const taskId = 'rss-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const task = { id: taskId, type: 'rss', total: items.length, completed: 0, errors: 0, status: 'running', results: [], startedAt: Date.now() };
+  aiTasks.set(taskId, task);
+
+  (async () => {
+    const settings = getAISettings(true);
+    for (const item of items) {
+      try {
+        if (settings.apiKey && settings.model) {
+          const messages = [
+            { role: 'system', content: '你是地图描述助手。用一两句话简洁描述这张历史地图的内容和价值，适合 RSS 阅读。只输出描述文字。' },
+            { role: 'user', content: `地图标题: ${item.title || item.file_name}\n国家: ${item.country_name || ''}\n省份: ${item.province || ''}\n城市: ${item.city || ''}\n年代: ${item.year_label || ''}` }
+          ];
+          const data = await chatCompletion({ provider: settings.provider, apiUrl: settings.apiUrl, apiKey: settings.apiKey, model: settings.model, messages, options: { maxTokens: 100 } });
+          const desc = extractContent(data).trim();
+          task.results.push({ id: item.id, title: item.title || item.file_name, description: desc });
+        } else {
+          const desc = [item.country_name, item.province, item.city, item.year_label].filter(Boolean).join(' · ') || '历史地图';
+          task.results.push({ id: item.id, title: item.title || item.file_name, description: desc });
+        }
+      } catch (err) {
+        task.errors++;
+        task.results.push({ id: item.id, title: item.title || item.file_name, description: '' });
+      }
+      task.completed++;
+    }
+    task.status = 'done';
+    task.finishedAt = Date.now();
+    addRssHistory({ date: new Date().toISOString(), count: items.length, titles: task.results.slice(0, 5).map((r) => r.title), ai: Boolean(settings.apiKey && settings.model) });
+    setTimeout(() => aiTasks.delete(taskId), 600000);
+  })();
+
+  res.json({ ok: true, taskId, total: items.length });
+});
+
+router.get('/feed/rss', (req, res) => {
+  const rss = getRssSettings();
+  if (!rss.enabled) {
+    return res.status(404).send('RSS feed is disabled');
+  }
+
+  const host = `${req.protocol}://${req.get('host')}`;
+  const today = new Date().toISOString().slice(0, 10);
+  const refresh = req.query.refresh === 'true';
+
+  // Use date as seed for deterministic daily selection, or random if refresh
+  let rows;
+  if (refresh) {
+    rows = dbInstance.prepare('SELECT * FROM maps ORDER BY RANDOM() LIMIT 10').all();
+  } else {
+    const total = dbInstance.prepare('SELECT COUNT(*) AS c FROM maps').get().c;
+    if (total === 0) {
+      rows = [];
+    } else {
+      const seed = today.split('-').join('');
+      const offset = total > 10 ? (Number(seed) % (total - 10)) : 0;
+      rows = dbInstance.prepare('SELECT * FROM maps LIMIT 10 OFFSET ?').all(Math.max(0, offset));
+    }
+  }
+  const items = rows.map(rowToMap);
+
+  if (refresh) {
+    addRssHistory({ date: new Date().toISOString(), count: items.length, titles: items.slice(0, 5).map((i) => i.title || i.file_name) });
+  }
+
+  const escXml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const itemsXml = items.map((item) => {
+    const title = item.title || item.file_name || '未命名地图';
+    const desc = item.description || [item.country_name, item.province, item.city, item.year_label].filter(Boolean).join(' · ') || '历史地图';
+    const link = `${host}/api/files/${item.id}?max=800`;
+    const thumb = `${host}/api/files/${item.id}?max=400&quality=72`;
+    return `    <item>
+      <title>${escXml(title)}</title>
+      <description><![CDATA[<p>${escXml(desc)}</p><img src="${thumb}" alt="${escXml(title)}" />]]></description>
+      <link>${link}</link>
+      <guid isPermaLink="false">${item.id}-${today}</guid>
+      <pubDate>${new Date().toUTCString()}</pubDate>
+      <enclosure url="${thumb}" type="image/jpeg" />
+    </item>`;
+  }).join('\n');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${escXml(rss.title)}</title>
+    <description>${escXml(rss.description)}</description>
+    <link>${host}</link>
+    <atom:link href="${host}/api/feed/rss" rel="self" type="application/rss+xml" />
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <generator>Roamly</generator>
+${itemsXml}
+  </channel>
+</rss>`;
+
+  res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send(xml);
 });
 
 export default router;

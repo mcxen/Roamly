@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
 import FileManager from './components/FileManager.jsx';
+import Discover from './components/Discover.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
 import ImageViewer from './components/ImageViewer.jsx';
 import DetailPane from './components/DetailPane.jsx';
@@ -1077,6 +1078,7 @@ function App() {
         <div className="actions">
           <button className={viewMode === 'library' ? 'active' : ''} onClick={() => setViewMode('library')}>图库</button>
           <button className={viewMode === 'files' ? 'active' : ''} onClick={() => setViewMode('files')}>文件管理</button>
+          <button className={viewMode === 'discover' ? 'active' : ''} onClick={() => setViewMode('discover')}>发现</button>
           <button onClick={() => setSettingsOpen(true)}>设置</button>
         </div>
       </header>
@@ -1114,6 +1116,32 @@ function App() {
                 {uploadMetaOpen ? '收起上传' : '上传'}
               </button>
             </div>
+          </div>
+
+          <div className="filter-row">
+            <select value={filters.scope} onChange={(e) => setFilter('scope', e.target.value)}>
+              <option value="">全部范围</option>
+              <option value="national">国家级</option>
+              <option value="international">国际</option>
+            </select>
+            <select value={filters.country} onChange={(e) => { patchFilters({ country: e.target.value, province: '', city: '' }); loadFacets(e.target.value || undefined); }}>
+              <option value="">全部国家</option>
+              {(facets.country || []).map((item) => (
+                <option key={item.value} value={item.value}>{item.value} ({item.count})</option>
+              ))}
+            </select>
+            <select value={filters.province} onChange={(e) => { patchFilters({ province: e.target.value, city: '' }); }}>
+              <option value="">全部省份</option>
+              {(facets.province || []).map((item) => (
+                <option key={item.value} value={item.value}>{item.value} ({item.count})</option>
+              ))}
+            </select>
+            <select value={filters.city} onChange={(e) => setFilter('city', e.target.value)}>
+              <option value="">全部城市</option>
+              {(facets.city || []).map((item) => (
+                <option key={item.value} value={item.value}>{item.value} ({item.count})</option>
+              ))}
+            </select>
           </div>
 
           {uploadMetaOpen ? (
@@ -1301,6 +1329,8 @@ function App() {
           cityResolveBusy={cityResolveBusy}
         />      </main>
         </>
+      ) : viewMode === 'discover' ? (
+        <Discover onSelectMap={(item) => { setSelectedId(item.id); setViewMode('library'); }} />
       ) : (
         <FileManager
           status={status}
@@ -1322,6 +1352,9 @@ function App() {
           setViewMode={setViewMode}
           ocrStatus={ocrStatus}
           stats={stats}
+          handleBatchAIExtract={handleBatchAIExtract}
+          handleOcrReindex={handleOcrReindex}
+          aiBusy={aiBusy}
         />
       )}
 

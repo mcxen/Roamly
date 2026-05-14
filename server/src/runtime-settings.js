@@ -76,6 +76,12 @@ const runtimeState = {
   mapLibraryDir: normalizePath(process.env.MAP_LIBRARY_DIR || persisted.mapLibraryDir || config.mapLibraryDir || ''),
   serverMapDir: normalizePath(process.env.SERVER_MAP_DIR || persisted.serverMapDir || config.serverMapDir || path.resolve(config.dataDir, 'maps')),
   ai: migrateAISettings(persisted.ai),
+  rss: {
+    enabled: persisted.rss?.enabled ?? true,
+    title: persisted.rss?.title || 'Roamly 每日地图推荐',
+    description: persisted.rss?.description || '每日精选 10 张历史地图，附 AI 自动整理描述',
+    history: Array.isArray(persisted.rss?.history) ? persisted.rss.history : []
+  },
   webdav: {
     url: process.env.WEBDAV_URL || persisted.webdav?.url || config.webdav.url || '',
     username: process.env.WEBDAV_USER || persisted.webdav?.username || config.webdav.username || '',
@@ -306,5 +312,26 @@ export const getRuntimeSettings = () => ({
   ai: getAISettings(false),
   projectKey: getProjectKey()
 });
+
+export const getRssSettings = () => ({
+  enabled: runtimeState.rss.enabled,
+  title: runtimeState.rss.title,
+  description: runtimeState.rss.description,
+  history: runtimeState.rss.history
+});
+
+export const setRssSettings = (payload = {}) => {
+  if (payload.enabled !== undefined) runtimeState.rss.enabled = Boolean(payload.enabled);
+  if (payload.title !== undefined) runtimeState.rss.title = String(payload.title || '').trim();
+  if (payload.description !== undefined) runtimeState.rss.description = String(payload.description || '').trim();
+  saveSettings();
+  return getRssSettings();
+};
+
+export const addRssHistory = (entry) => {
+  runtimeState.rss.history.unshift(entry);
+  if (runtimeState.rss.history.length > 50) runtimeState.rss.history.length = 50;
+  saveSettings();
+};
 
 export const getSettingsPath = () => settingsPath;

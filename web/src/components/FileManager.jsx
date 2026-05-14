@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Upload, FolderOpen, RefreshCw, Server, FileText } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Upload, FolderOpen, RefreshCw, Server, FileText, Bot, CheckCircle2, Loader2, Image, BarChart3, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Input } from './ui/input';
@@ -8,6 +8,7 @@ import { Select } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { api } from '../api.js';
 
 const STORAGE_BAND_OPTIONS = [
   { value: '', label: '未设置' },
@@ -20,214 +21,310 @@ const STORAGE_BAND_OPTIONS = [
   { value: 'purple', label: '紫条' }
 ];
 
+const BAND_COLORS = {
+  red: '#ef4444', orange: '#f97316', yellow: '#eab308',
+  green: '#22c55e', cyan: '#06b6d4', blue: '#3b82f6', purple: '#a855f7', '未设置': '#94a3b8'
+};
+
+function ProgressBar({ value, max = 100, className = '' }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className={`tw-h-2 tw-w-full tw-rounded-full tw-bg-slate-100 tw-overflow-hidden ${className}`}>
+      <div className="tw-h-full tw-rounded-full tw-bg-slate-900 tw-transition-all tw-duration-300 tw-ease-out" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function AITaskPanel({ tasks, onRefresh }) {
+  if (!tasks.length) return null;
+  return (
+    <Card className="tw-animate-in tw-slide-in-from-top-2 tw-duration-300">
+      <CardHeader className="tw-py-3 tw-px-4">
+        <div className="tw-flex tw-items-center tw-justify-between">
+          <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+            <Bot className="tw-w-4 tw-h-4" />
+            AI 识别任务
+          </CardTitle>
+          <Button variant="ghost" size="icon" className="tw-h-7 tw-w-7" onClick={onRefresh}>
+            <RefreshCw className="tw-w-3.5 tw-h-3.5" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="tw-pt-0 tw-px-4 tw-pb-3 tw-space-y-2">
+        {tasks.map((task) => (
+          <div key={task.id} className="tw-rounded-lg tw-border tw-border-slate-200 tw-p-3 tw-space-y-2">
+            <div className="tw-flex tw-items-center tw-justify-between tw-text-xs">
+              <span className="tw-text-slate-600">
+                {task.status === 'running' ? <Loader2 className="tw-w-3 tw-h-3 tw-inline tw-animate-spin tw-mr-1" /> : <CheckCircle2 className="tw-w-3 tw-h-3 tw-inline tw-text-green-600 tw-mr-1" />}
+                {task.status === 'running' ? '识别中' : '已完成'}
+              </span>
+              <span className="tw-text-slate-500">{task.completed}/{task.total}</span>
+            </div>
+            <ProgressBar value={task.completed} max={task.total} />
+            {task.errors > 0 && <p className="tw-text-xs tw-text-red-500">失败: {task.errors}</p>}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FileManager({
   status, busy, uploadFiles, setUploadFiles, uploadFolder, setUploadFolder,
-  uploadMeta, setUploadMeta, folderOptions, handleScan, handleUpload,
+  uploadMeta, setUploadMeta, folderOptions, handleScan, handleUpload: _handleUpload,
   handleFileDrop, loadStorageFolders, mcpInfo, maps, setSelectedId, setViewMode,
-  ocrStatus, stats
+  setMessage, setError, ocrStatus, stats, handleBatchAIExtract, handleOcrReindex, aiBusy
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [aiTasks, setAITasks] = useState([]);
+  const [viewImage, setViewImage] = useState(null);
+  const pollRef = useRef(null);
 
-  const indexPct = stats?.total ? 100 : 0;
-  const ocrPct = stats?.total ? Math.round((stats.withOcr / stats.total) * 100) : 0;
-  const aiPct = stats?.total ? Math.round((stats.withAI / stats.total) * 100) : 0;
+  const handleUploadWithProgress = useCallback(async () => {
+    if (!uploadFiles.length) return;
+    setUploading(true);
+    setOverallProgress(0);
+    const form = new FormData();
+    uploadFiles.forEach((file) => form.append('files', file));
+    form.append('folder', uploadFolder || '');
+    Object.entries(uploadMeta || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      form.append(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/maps/upload');
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) setOverallProgress((e.loaded / e.total) * 100); };
+        xhr.onload = () => xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
+        xhr.onerror = () => reject(new Error('网络错误'));
+        xhr.send(form);
+      });
+      setMessage?.('上传完成');
+      setUploadFiles([]);
+    } catch (err) { setError?.(err.message); }
+    finally { setTimeout(() => { setUploading(false); setOverallProgress(0); }, 1200); }
+  }, [uploadFiles, uploadFolder, uploadMeta, setUploadFiles, setMessage, setError]);
+
+  const refreshAITasks = useCallback(async () => {
+    try { const d = await api.aiTasks(); setAITasks(d.tasks || []); } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    refreshAITasks();
+    pollRef.current = setInterval(refreshAITasks, 3000);
+    return () => clearInterval(pollRef.current);
+  }, [refreshAITasks]);
+
+  useEffect(() => {
+    const hasRunning = aiTasks.some((t) => t.status === 'running');
+    if (!hasRunning && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    else if (hasRunning && !pollRef.current) { pollRef.current = setInterval(refreshAITasks, 3000); }
+  }, [aiTasks, refreshAITasks]);
 
   return (
-    <div className="tw-grid tw-grid-cols-1 lg:tw-grid-cols-[1fr_320px] tw-gap-4 tw-p-4 tw-flex-1 tw-min-h-0">
-      <Card className="tw-flex tw-flex-col tw-min-w-0">
-        <CardHeader className="tw-flex-row tw-items-center tw-justify-between tw-space-y-0 tw-pb-3">
-          <div>
-            <CardTitle className="tw-text-xl tw-flex tw-items-center tw-gap-2">
-              <FolderOpen className="tw-w-5 tw-h-5" />
-              文件管理
-            </CardTitle>
-            <CardDescription className="tw-mt-1">
-              {status?.storageDriver === 'webdav'
-                ? `WebDAV: ${status?.webdav?.rootPath || '/'}`
-                : `服务端目录: ${status?.storageDriver === 'server' ? (status?.serverMapDir || '未设置') : (status?.mapLibraryDir || '未设置')}`}
-            </CardDescription>
-          </div>
-          <div className="tw-flex tw-gap-2 tw-flex-wrap">
-            <Button variant="outline" size="sm" onClick={handleScan} disabled={busy}>
-              <RefreshCw className="tw-w-3.5 tw-h-3.5" />
-              重扫目录
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => loadStorageFolders(status?.storageDriver)} disabled={busy}>
-              <FolderOpen className="tw-w-3.5 tw-h-3.5" />
-              刷新文件夹
-            </Button>
-          </div>
-        </CardHeader>
-
-        <CardContent className="tw-flex tw-flex-col tw-gap-4 tw-flex-1">
-          {/* Progress indicators */}
-          {stats ? (
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <div className="progress-row">
-                <span className="progress-label">文件索引</span>
-                <div className="progress-track"><div className={`progress-fill${indexPct >= 100 ? ' done' : ''}`} style={{ width: `${indexPct}%` }} /></div>
-                <span className="progress-value">{stats.total} 张</span>
+    <div className="tw-grid tw-grid-cols-1 lg:tw-grid-cols-[1fr_340px] tw-gap-4 tw-p-4 tw-flex-1 tw-min-h-0 tw-overflow-auto">
+      {/* Main column */}
+      <div className="tw-flex tw-flex-col tw-gap-4 tw-min-w-0">
+        {/* Upload card */}
+        <Card>
+          <CardHeader className="tw-flex-row tw-items-center tw-justify-between tw-space-y-0 tw-pb-3">
+            <div>
+              <CardTitle className="tw-text-lg tw-flex tw-items-center tw-gap-2">
+                <FolderOpen className="tw-w-5 tw-h-5" />
+                文件管理
+              </CardTitle>
+              <CardDescription className="tw-mt-1">
+                {status?.storageDriver === 'webdav'
+                  ? `WebDAV: ${status?.webdav?.rootPath || '/'}`
+                  : `目录: ${status?.storageDriver === 'server' ? (status?.serverMapDir || '未设置') : (status?.mapLibraryDir || '未设置')}`}
+              </CardDescription>
+            </div>
+            <div className="tw-flex tw-gap-2 tw-flex-wrap">
+              <Button variant="outline" size="sm" onClick={handleScan} disabled={busy}>
+                <RefreshCw className="tw-w-3.5 tw-h-3.5" /> 重扫
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => loadStorageFolders(status?.storageDriver)} disabled={busy}>
+                <FolderOpen className="tw-w-3.5 tw-h-3.5" /> 刷新
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="tw-space-y-4">
+            <div
+              className={`tw-border-2 tw-border-dashed tw-rounded-lg tw-p-5 tw-text-center tw-transition-all tw-duration-200 ${dragOver ? 'tw-border-slate-900 tw-bg-slate-50 tw-scale-[1.01]' : 'tw-border-slate-200 tw-bg-slate-50/50'}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { setDragOver(false); handleFileDrop(e); }}
+            >
+              <Upload className={`tw-w-7 tw-h-7 tw-mx-auto tw-mb-2 tw-transition-transform tw-duration-200 ${dragOver ? 'tw-text-slate-900 tw-scale-110' : 'tw-text-slate-400'}`} />
+              <p className="tw-font-medium tw-text-slate-700 tw-text-sm">{uploadFiles.length ? `已选择 ${uploadFiles.length} 个文件` : '拖入或选择地图文件'}</p>
+              <input type="file" accept="image/*" multiple className="tw-mt-2 tw-text-xs tw-file:mr-2 tw-file:rounded-md tw-file:border-0 tw-file:bg-slate-900 tw-file:px-2.5 tw-file:py-1 tw-file:text-xs tw-file:text-white tw-cursor-pointer" onChange={(e) => setUploadFiles(Array.from(e.target.files || []))} />
+            </div>
+            {uploading && (
+              <div className="tw-space-y-1">
+                <div className="tw-flex tw-justify-between tw-text-xs tw-text-slate-500"><span>上传中</span><span>{Math.round(overallProgress)}%</span></div>
+                <ProgressBar value={overallProgress} />
               </div>
-              <div className="progress-row">
-                <span className="progress-label">OCR 识别</span>
-                <div className="progress-track"><div className={`progress-fill${ocrPct >= 100 ? ' done' : ''}`} style={{ width: `${ocrPct}%` }} /></div>
-                <span className="progress-value">{stats.withOcr}/{stats.total} ({ocrPct}%)</span>
-              </div>
-              <div className="progress-row">
-                <span className="progress-label">AI 提取</span>
-                <div className="progress-track"><div className={`progress-fill${aiPct >= 100 ? ' done' : ''}`} style={{ width: `${aiPct}%` }} /></div>
-                <span className="progress-value">{stats.withAI}/{stats.total} ({aiPct}%)</span>
-              </div>
-              {ocrStatus?.queueSize > 0 ? (
-                <div className="progress-row">
-                  <span className="progress-label">OCR 队列</span>
-                  <span className="progress-value">{ocrStatus.queueSize} 待处理</span>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* Drop zone */}
-          <div
-            className={`tw-border-2 tw-border-dashed tw-rounded-lg tw-p-6 tw-text-center tw-transition-colors ${dragOver ? 'tw-border-slate-900 tw-bg-slate-50' : 'tw-border-slate-200 tw-bg-slate-50/50'}`}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { setDragOver(false); handleFileDrop(e); }}
-          >
-            <Upload className="tw-w-8 tw-h-8 tw-mx-auto tw-text-slate-400 tw-mb-3" />
-            <p className="tw-font-medium tw-text-slate-700">
-              {uploadFiles.length ? `已选择 ${uploadFiles.length} 个文件` : '选择或拖入地图文件'}
-            </p>
-            <p className="tw-text-xs tw-text-slate-500 tw-mt-1">支持 jpg、png、webp、tif 等图片；留空文件夹时会按文件名自动归类</p>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="tw-mt-3 tw-text-sm tw-file:mr-3 tw-file:rounded-md tw-file:border-0 tw-file:bg-slate-900 tw-file:px-3 tw-file:py-1.5 tw-file:text-sm tw-file:text-white hover:tw-file:bg-slate-800 tw-cursor-pointer"
-              onChange={(e) => setUploadFiles(Array.from(e.target.files || []))}
-            />
-          </div>
-
-          {/* Metadata form */}
-          <div className="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-3">
-            <div className="tw-space-y-1.5">
-              <Label>目标文件夹</Label>
-              <Select value={uploadFolder} onChange={(e) => setUploadFolder(e.target.value)}>
-                {folderOptions.map((item) => (
-                  <option key={item || '__root__'} value={item}>{item || '/ (自动/根目录)'}</option>
-                ))}
-              </Select>
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>城市</Label>
-              <Input value={uploadMeta.city} onChange={(e) => setUploadMeta((p) => ({ ...p, city: e.target.value }))} placeholder="可选，自动补全定位" />
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>年代</Label>
-              <Input value={uploadMeta.year_label} onChange={(e) => setUploadMeta((p) => ({ ...p, year_label: e.target.value }))} placeholder="可选" />
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>标签</Label>
-              <Input value={uploadMeta.tags} onChange={(e) => setUploadMeta((p) => ({ ...p, tags: e.target.value }))} placeholder="逗号分隔" />
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>专题 / 战役</Label>
-              <Input value={uploadMeta.campaign} onChange={(e) => setUploadMeta((p) => ({ ...p, campaign: e.target.value }))} placeholder="可选" />
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>收藏单位</Label>
-              <Input value={uploadMeta.collection_unit} onChange={(e) => setUploadMeta((p) => ({ ...p, collection_unit: e.target.value }))} placeholder="可选" />
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>色条</Label>
-              <Select value={uploadMeta.storage_band} onChange={(e) => setUploadMeta((p) => ({ ...p, storage_band: e.target.value }))}>
-                {STORAGE_BAND_OPTIONS.map((item) => (
-                  <option key={item.value || 'none'} value={item.value}>{item.label}</option>
-                ))}
-              </Select>
-            </div>
-            <div className="tw-space-y-1.5">
-              <Label>密级</Label>
-              <Select value={uploadMeta.security_level} onChange={(e) => setUploadMeta((p) => ({ ...p, security_level: e.target.value }))}>
-                <option value="">默认</option>
-                <option value="内部教学">内部教学</option>
-                <option value="内部资料">内部资料</option>
-                <option value="保密审看">保密审看</option>
-              </Select>
-            </div>
-            <div className="tw-space-y-1.5 sm:tw-col-span-2">
-              <Label>批量描述</Label>
-              <Textarea value={uploadMeta.description} onChange={(e) => setUploadMeta((p) => ({ ...p, description: e.target.value }))} rows={2} placeholder="可选" />
-            </div>
-            <div className="tw-flex tw-items-center tw-gap-4 tw-col-span-full">
-              <label className="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-cursor-pointer">
-                <input type="checkbox" className="tw-rounded" checked={uploadMeta.favorite} onChange={(e) => setUploadMeta((p) => ({ ...p, favorite: e.target.checked }))} />
-                上传后收藏
-              </label>
-              <label className="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-cursor-pointer">
-                <input type="checkbox" className="tw-rounded" checked={uploadMeta.auto_resolve_city} onChange={(e) => setUploadMeta((p) => ({ ...p, auto_resolve_city: e.target.checked }))} />
-                根据城市自动定位
-              </label>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <Separator />
-          <div className="tw-flex tw-items-center tw-gap-3 tw-flex-wrap">
-            <Button onClick={handleUpload} disabled={!uploadFiles.length || busy} className="tw-min-w-[120px]">
-              <Upload className="tw-w-4 tw-h-4" />
-              上传到服务端
-            </Button>
-            {uploadFiles.length > 0 && (
-              <span className="tw-text-xs tw-text-slate-500">
-                {uploadFiles.map((f) => f.name).slice(0, 3).join('、')}{uploadFiles.length > 3 ? ` 等 ${uploadFiles.length} 个` : ''}
-              </span>
             )}
-          </div>
-        </CardContent>
-      </Card>
+            <div className="tw-grid tw-grid-cols-2 sm:tw-grid-cols-4 tw-gap-2">
+              <div className="tw-space-y-1"><Label className="tw-text-[11px]">文件夹</Label><Select value={uploadFolder} onChange={(e) => setUploadFolder(e.target.value)}>{folderOptions.map((i) => <option key={i || '_'} value={i}>{i || '/ (自动)'}</option>)}</Select></div>
+              <div className="tw-space-y-1"><Label className="tw-text-[11px]">城市</Label><Input value={uploadMeta.city} onChange={(e) => setUploadMeta((p) => ({ ...p, city: e.target.value }))} placeholder="可选" /></div>
+              <div className="tw-space-y-1"><Label className="tw-text-[11px]">年代</Label><Input value={uploadMeta.year_label} onChange={(e) => setUploadMeta((p) => ({ ...p, year_label: e.target.value }))} placeholder="可选" /></div>
+              <div className="tw-space-y-1"><Label className="tw-text-[11px]">标签</Label><Input value={uploadMeta.tags} onChange={(e) => setUploadMeta((p) => ({ ...p, tags: e.target.value }))} placeholder="逗号分隔" /></div>
+            </div>
+            <div className="tw-flex tw-items-center tw-gap-3 tw-flex-wrap">
+              <Button size="sm" onClick={handleUploadWithProgress} disabled={!uploadFiles.length || busy || uploading}>
+                {uploading ? <Loader2 className="tw-w-3.5 tw-h-3.5 tw-animate-spin" /> : <Upload className="tw-w-3.5 tw-h-3.5" />}
+                {uploading ? '上传中...' : '上传'}
+              </Button>
+              {uploadFiles.length > 0 && !uploading && (
+                <span className="tw-text-xs tw-text-slate-500">{uploadFiles.map((f) => f.name).slice(0, 2).join('、')}{uploadFiles.length > 2 ? ` 等${uploadFiles.length}个` : ''}</span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* File list */}
+        <Card>
+          <CardHeader className="tw-py-3 tw-px-4">
+            <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+              <Image className="tw-w-4 tw-h-4" />
+              图片文件列表
+              {stats?.total ? <Badge variant="secondary" className="tw-text-[10px]">{stats.total}</Badge> : null}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="tw-pt-0 tw-px-4 tw-pb-3">
+            <div className="tw-grid tw-grid-cols-1 tw-gap-1.5 tw-max-h-[420px] tw-overflow-y-auto">
+              {maps.map((item) => (
+                <div
+                  key={item.id}
+                  className="tw-flex tw-items-center tw-gap-3 tw-rounded-lg tw-p-2 hover:tw-bg-slate-50 tw-cursor-pointer tw-transition-colors tw-group"
+                  onClick={() => setViewImage(item)}
+                >
+                  <img
+                    src={`/api/files/${item.id}?max=80&quality=60`}
+                    alt=""
+                    className="tw-w-10 tw-h-10 tw-rounded tw-object-cover tw-border tw-border-slate-200 tw-shrink-0"
+                    loading="lazy"
+                  />
+                  <div className="tw-flex-1 tw-min-w-0">
+                    <p className="tw-text-sm tw-truncate tw-text-slate-800">{item.title || item.file_name}</p>
+                    <p className="tw-text-[11px] tw-text-slate-400 tw-truncate">{[item.country_name, item.city, item.year_label].filter(Boolean).join(' · ') || item.source}</p>
+                  </div>
+                  {item.storage_band && <span className="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-shrink-0" style={{ background: BAND_COLORS[item.storage_band] || '#94a3b8' }} />}
+                </div>
+              ))}
+              {!maps.length && <p className="tw-text-center tw-text-slate-400 tw-text-sm tw-py-6">暂无文件</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* AI Tasks */}
+        <AITaskPanel tasks={aiTasks} onRefresh={refreshAITasks} />
+      </div>
 
       {/* Sidebar */}
       <div className="tw-flex tw-flex-col tw-gap-4">
+        {/* Storage stats */}
+        {stats && (
+          <Card>
+            <CardHeader className="tw-py-3 tw-px-4">
+              <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+                <BarChart3 className="tw-w-4 tw-h-4" />
+                彩虹存储统计
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="tw-pt-0 tw-px-4 tw-pb-3 tw-space-y-3">
+              <div className="tw-grid tw-grid-cols-3 tw-gap-2 tw-text-center">
+                <div className="tw-rounded-lg tw-bg-slate-50 tw-p-2"><p className="tw-text-lg tw-font-semibold">{stats.total}</p><p className="tw-text-[10px] tw-text-slate-500">总计</p></div>
+                <div className="tw-rounded-lg tw-bg-slate-50 tw-p-2"><p className="tw-text-lg tw-font-semibold">{stats.favorites}</p><p className="tw-text-[10px] tw-text-slate-500">收藏</p></div>
+                <div className="tw-rounded-lg tw-bg-slate-50 tw-p-2"><p className="tw-text-lg tw-font-semibold">{stats.withAI}</p><p className="tw-text-[10px] tw-text-slate-500">AI 已处理</p></div>
+              </div>
+              <Separator />
+              <div className="tw-space-y-1.5">
+                {(stats.storageBands || []).map((item) => (
+                  <div key={item.band} className="tw-flex tw-items-center tw-gap-2 tw-text-xs">
+                    <span className="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-shrink-0" style={{ background: BAND_COLORS[item.band] || '#94a3b8' }} />
+                    <span className="tw-w-10 tw-text-slate-600">{item.band}</span>
+                    <div className="tw-flex-1 tw-h-1.5 tw-rounded-full tw-bg-slate-100 tw-overflow-hidden">
+                      <div className="tw-h-full tw-rounded-full tw-transition-all tw-duration-500" style={{ width: `${stats.total ? (item.count / stats.total) * 100 : 0}%`, background: BAND_COLORS[item.band] || '#94a3b8' }} />
+                    </div>
+                    <span className="tw-w-8 tw-text-right tw-text-slate-500">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+              {stats.countries?.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="tw-flex tw-flex-wrap tw-gap-1">
+                    {stats.countries.slice(0, 8).map((c) => (
+                      <Badge key={c.name} variant="outline" className="tw-text-[10px]">{c.name} {c.count}</Badge>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AI Assist */}
         <Card>
-          <CardHeader className="tw-pb-3">
+          <CardHeader className="tw-py-3 tw-px-4">
             <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
-              <Server className="tw-w-4 tw-h-4" />
-              MCP 服务端
+              <Sparkles className="tw-w-4 tw-h-4" />
+              AI 辅助
             </CardTitle>
           </CardHeader>
-          <CardContent className="tw-space-y-2">
-            <p className="tw-text-xs tw-text-slate-500">Endpoint: /mcp</p>
-            <p className="tw-text-xs tw-text-slate-500">工具数: {mcpInfo?.tools?.length || 0}</p>
-            <div className="tw-flex tw-flex-wrap tw-gap-1.5 tw-mt-2">
-              {(mcpInfo?.tools || []).map((tool) => (
-                <Badge key={tool} variant="secondary" className="tw-text-[10px]">{tool}</Badge>
-              ))}
+          <CardContent className="tw-pt-0 tw-px-4 tw-pb-3 tw-space-y-2">
+            <p className="tw-text-xs tw-text-slate-500">AI 自动识别地图内容，提取国家、城市、年代、经纬度范围等元数据。</p>
+            <div className="tw-flex tw-flex-col tw-gap-2">
+              <Button variant="outline" size="sm" onClick={handleBatchAIExtract} disabled={!maps.length || aiBusy} className="tw-w-full tw-justify-start">
+                <Bot className="tw-w-3.5 tw-h-3.5" />
+                {aiBusy ? '批量提取中...' : `批量 AI 提取 (${Math.min(maps.length, 10)})`}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleOcrReindex} disabled={busy || !ocrStatus?.available} className="tw-w-full tw-justify-start">
+                <FileText className="tw-w-3.5 tw-h-3.5" />
+                重建 OCR 索引
+              </Button>
+            </div>
+            <div className="tw-grid tw-grid-cols-2 tw-gap-2 tw-text-center tw-mt-2">
+              <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-p-2"><p className="tw-text-sm tw-font-medium">{stats?.withOcr || 0}</p><p className="tw-text-[10px] tw-text-slate-500">OCR 完成</p></div>
+              <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-p-2"><p className="tw-text-sm tw-font-medium">{stats?.withCoords || 0}</p><p className="tw-text-[10px] tw-text-slate-500">有坐标</p></div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="tw-flex-1 tw-min-h-0 tw-overflow-hidden">
-          <CardHeader className="tw-pb-3">
+        {/* MCP */}
+        <Card>
+          <CardHeader className="tw-py-3 tw-px-4">
             <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
-              <FileText className="tw-w-4 tw-h-4" />
-              最近文件
+              <Server className="tw-w-4 tw-h-4" /> MCP
             </CardTitle>
           </CardHeader>
-          <CardContent className="tw-space-y-1 tw-overflow-y-auto tw-max-h-[400px]">
-            {maps.slice(0, 12).map((item) => (
-              <button
-                key={item.id}
-                className="tw-w-full tw-flex tw-items-center tw-justify-between tw-gap-2 tw-rounded-md tw-px-2.5 tw-py-2 tw-text-left tw-text-sm hover:tw-bg-slate-100 tw-transition-colors tw-border-0 tw-bg-transparent tw-cursor-pointer"
-                onClick={() => { setSelectedId(item.id); setViewMode('library'); }}
-              >
-                <span className="tw-truncate tw-text-slate-700">{item.title || item.file_name}</span>
-                <span className="tw-text-xs tw-text-slate-400 tw-shrink-0">{item.city || item.country_name || item.source}</span>
-              </button>
-            ))}
+          <CardContent className="tw-pt-0 tw-px-4 tw-pb-3">
+            <p className="tw-text-xs tw-text-slate-500">工具: {mcpInfo?.tools?.length || 0}</p>
+            <div className="tw-flex tw-flex-wrap tw-gap-1 tw-mt-2">
+              {(mcpInfo?.tools || []).map((t) => <Badge key={t} variant="secondary" className="tw-text-[10px]">{t}</Badge>)}
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Image lightbox */}
+      {viewImage && (
+        <div className="tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80 tw-flex tw-items-center tw-justify-center tw-p-4 tw-animate-in tw-fade-in tw-duration-200" onClick={() => setViewImage(null)}>
+          <div className="tw-relative tw-max-w-[90vw] tw-max-h-[90vh] tw-flex tw-flex-col tw-items-center" onClick={(e) => e.stopPropagation()}>
+            <img src={`/api/files/${viewImage.id}`} alt={viewImage.title || viewImage.file_name} className="tw-max-w-full tw-max-h-[80vh] tw-object-contain tw-rounded-lg tw-shadow-2xl" />
+            <div className="tw-mt-3 tw-text-center tw-text-white">
+              <p className="tw-font-medium">{viewImage.title || viewImage.file_name}</p>
+              <p className="tw-text-sm tw-text-white/70 tw-mt-1">{[viewImage.country_name, viewImage.city, viewImage.year_label].filter(Boolean).join(' · ')}</p>
+            </div>
+            <button className="tw-absolute tw-top-2 tw-right-2 tw-w-8 tw-h-8 tw-rounded-full tw-bg-white/20 tw-text-white tw-flex tw-items-center tw-justify-center hover:tw-bg-white/40 tw-transition-colors tw-border-0 tw-cursor-pointer tw-text-lg" onClick={() => setViewImage(null)}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

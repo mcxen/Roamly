@@ -43,6 +43,22 @@ export const api = {
   async aiProviders() {
     return handle(await fetch('/api/ai/providers'));
   },
+  async aiProviderConfigs() {
+    return handle(await fetch('/api/ai/provider-configs'));
+  },
+  async saveAIProviderConfig(payload) {
+    return handle(await fetch('/api/ai/provider-configs', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async deleteAIProviderConfig(id) {
+    return handle(await fetch(`/api/ai/provider-configs/${id}`, { method: 'DELETE' }));
+  },
+  async activateAIProvider(id) {
+    return handle(await fetch(`/api/ai/provider-configs/${id}/activate`, { method: 'POST' }));
+  },
   async aiModels(payload) {
     return handle(await fetch('/api/ai/models', {
       method: 'POST',
@@ -203,5 +219,35 @@ export const api = {
   },
   async chinaCities() {
     return handle(await fetch('/api/locations/china-cities'));
+  },
+  async randomMaps(limit = 10, hasCoords = false) {
+    const params = new URLSearchParams({ limit, hasCoords });
+    return handle(await fetch(`/api/maps/random?${params}`));
+  },
+  async batchExtractAsync(ids, options = {}) {
+    return handle(await fetch('/api/ai/maps/batch-extract-async', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, ...options })
+    }));
+  },
+  async aiTaskStatus(taskId) {
+    return handle(await fetch(`/api/ai/tasks/${taskId}`));
+  },
+  async aiTasks() {
+    return handle(await fetch('/api/ai/tasks'));
+  },
+  async rssSettings() {
+    return handle(await fetch('/api/rss/settings'));
+  },
+  async saveRssSettings(payload) {
+    return handle(await fetch('/api/rss/settings', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async rssGenerate() {
+    return handle(await fetch('/api/rss/generate', { method: 'POST' }));
   }
 };
