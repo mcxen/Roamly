@@ -82,6 +82,10 @@ const runtimeState = {
     description: persisted.rss?.description || '每日精选 10 张历史地图，附 AI 自动整理描述',
     history: Array.isArray(persisted.rss?.history) ? persisted.rss.history : []
   },
+  discover: {
+    showCard: persisted.discover?.showCard ?? true,
+    prompt: persisted.discover?.prompt || '你是地图馆每日推荐助手。根据当前日期、时间和天气信息，用 2-3 句话推荐今天适合浏览的地图主题或方向，语气轻松有趣。只输出推荐语，不要输出其他内容。'
+  },
   webdav: {
     url: process.env.WEBDAV_URL || persisted.webdav?.url || config.webdav.url || '',
     username: process.env.WEBDAV_USER || persisted.webdav?.username || config.webdav.username || '',
@@ -332,6 +336,15 @@ export const addRssHistory = (entry) => {
   runtimeState.rss.history.unshift(entry);
   if (runtimeState.rss.history.length > 50) runtimeState.rss.history.length = 50;
   saveSettings();
+};
+
+export const getDiscoverSettings = () => ({ ...runtimeState.discover });
+
+export const setDiscoverSettings = (payload = {}) => {
+  if (payload.showCard !== undefined) runtimeState.discover.showCard = Boolean(payload.showCard);
+  if (payload.prompt !== undefined) runtimeState.discover.prompt = String(payload.prompt || '').trim();
+  saveSettings();
+  return getDiscoverSettings();
 };
 
 export const getSettingsPath = () => settingsPath;

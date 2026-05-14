@@ -35,6 +35,8 @@ import {
   getRssSettings,
   setRssSettings,
   addRssHistory,
+  getDiscoverSettings,
+  setDiscoverSettings,
   setMapLibraryDir,
   setServerMapDir,
   setStorageDriver,
@@ -1752,6 +1754,74 @@ router.get('/files/:id', (req, res) => {
     .catch(() => sendOriginal());
 });
 
+// ─── Discover ────────────────────────────────────────────────────────────────
+
+router.get('/discover/settings', (_req, res) => {
+  res.json({ ok: true, ...getDiscoverSettings() });
+});
+
+router.post('/discover/settings', (req, res) => {
+  const data = setDiscoverSettings(req.body || {});
+  res.json({ ok: true, ...data });
+});
+
+router.get('/discover/recommendation', async (req, res) => {
+  try {
+    const settings = getAISettings(true);
+    const discoverSettings = getDiscoverSettings();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+    const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+    // Get a sample of what's in the library for context
+    const sample = dbInstance.prepare('SELECT country_name, province, city, year_label FROM maps ORDER BY RANDOM() LIMIT 5').all();
+    const libraryHint = sample.map((r) => [r.country_name, r.province, r.city, r.year_label].filter(Boolean).join('/')).join('；');
+
+    if (!settings.apiKey || !settings.model) {
+      // No AI configured, return static recommendation
+      return res.json({
+        ok: true,
+        date: dateStr,
+        time: timeStr,
+        content: '配置 AI 后可获取每日个性化推荐。当前可浏览下方地图发现新内容。',
+        source: 'static'
+      });
+    }
+
+    const userMsg = `当前日期: ${dateStr}\n当前时间: ${timeStr}\n图库样本: ${libraryHint || '暂无'}`;
+    const messages = [
+      { role: 'system', content: discoverSettings.prompt },
+      { role: 'user', content: userMsg }
+    ];
+
+    const data = await chatCompletion({
+      provider: settings.provider, apiUrl: settings.apiUrl,
+      apiKey: settings.apiKey, model: settings.model,
+      messages, options: { maxTokens: 150 }
+    });
+
+    res.json({
+      ok: true,
+      date: dateStr,
+      time: timeStr,
+      content: extractContent(data).trim(),
+      source: 'ai',
+      model: data.model || settings.model
+    });
+  } catch (err) {
+    logger.error({ err }, 'Discover recommendation failed');
+    const now = new Date();
+    res.json({
+      ok: true,
+      date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
+      time: now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      content: '今天是探索历史地图的好日子，试试随机浏览吧！',
+      source: 'fallback',
+      error: err.message
+    });
+  }
+});
+
 // ─── RSS Feed ────────────────────────────────────────────────────────────────
 
 router.get('/rss/settings', (_req, res) => {
@@ -1780,10 +1850,17 @@ router.post('/rss/generate', (req, res) => {
     for (const item of items) {
       try {
         if (settings.apiKey && settings.model) {
-          const messages = [
-            { role: 'system', content: '你是地图描述助手。用一两句话简洁描述这张历史地图的内容和价值，适合 RSS 阅读。只输出描述文字。' },
-            { role: 'user', content: `地图标题: ${item.title || item.file_name}\n国家: ${item.country_name || ''}\n省份: ${item.province || ''}\n城市: ${item.city || ''}\n年代: ${item.year_label || ''}` }
+          const row = statements.findById.get(item.id);
+          const content = [
+            { type: 'text', text: `你是地图描述助手。用一两句话简洁描述这张历史地图的内容和价值，适合 RSS 阅读。只输出描述文字。\n\n地图标题: ${item.title || item.file_name}\n国家: ${item.country_name || ''}\n省份: ${item.province || ''}\n城市: ${item.city || ''}\n年代: ${item.year_label || ''}` }
           ];
+          if (row) {
+            try {
+              const imageUrl = await makeAIImageDataURL(row);
+              content.push({ type: 'image_url', image_url: { url: imageUrl } });
+            } catch (_) {}
+          }
+          const messages = [{ role: 'user', content }];
           const data = await chatCompletion({ provider: settings.provider, apiUrl: settings.apiUrl, apiKey: settings.apiKey, model: settings.model, messages, options: { maxTokens: 100 } });
           const desc = extractContent(data).trim();
           task.results.push({ id: item.id, title: item.title || item.file_name, description: desc });

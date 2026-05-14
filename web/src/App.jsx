@@ -5,7 +5,6 @@ import Discover from './components/Discover.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
 import ImageViewer from './components/ImageViewer.jsx';
 import DetailPane from './components/DetailPane.jsx';
-import StatsPanel from './components/StatsPanel.jsx';
 
 const STORAGE_BAND_OPTIONS = [
   { value: '', label: '未设置' },
@@ -1216,7 +1215,7 @@ function App() {
             </>
           ) : null}
 
-          {!uploadMetaOpen && stats ? <StatsPanel /> : null}
+
 
           <div className="count-line compact-count-line">
             <span>共 {total} 张，{totalPages} 页，当前第 {page} 页</span>
@@ -1330,7 +1329,7 @@ function App() {
         />      </main>
         </>
       ) : viewMode === 'discover' ? (
-        <Discover onSelectMap={(item) => { setSelectedId(item.id); setViewMode('library'); }} />
+        <Discover />
       ) : (
         <FileManager
           status={status}

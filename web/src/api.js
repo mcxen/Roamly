@@ -249,5 +249,18 @@ export const api = {
   },
   async rssGenerate() {
     return handle(await fetch('/api/rss/generate', { method: 'POST' }));
+  },
+  async discoverSettings() {
+    return handle(await fetch('/api/discover/settings'));
+  },
+  async saveDiscoverSettings(payload) {
+    return handle(await fetch('/api/discover/settings', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async discoverRecommendation() {
+    return handle(await fetch('/api/discover/recommendation'));
   }
 };

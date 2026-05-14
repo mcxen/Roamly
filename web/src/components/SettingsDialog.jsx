@@ -4,6 +4,54 @@ import { api } from '../api.js';
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
+function DiscoverSettings() {
+  const [form, setForm] = useState({ showCard: true, prompt: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    api.discoverSettings().then((d) => {
+      setForm({ showCard: d.showCard ?? true, prompt: d.prompt || '' });
+    }).catch(() => {});
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.saveDiscoverSettings(form);
+      setMsg('已保存');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e) { setMsg(e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="settings-block">
+      <h4>发现页设置</h4>
+      <div className="settings-tip">控制发现页右上角 AI 推荐卡片的显示和提示词。</div>
+      <label className="settings-check">
+        <input type="checkbox" checked={form.showCard} onChange={(e) => setForm((p) => ({ ...p, showCard: e.target.checked }))} />
+        显示 AI 推荐卡片
+      </label>
+      <label style={{ marginTop: 8 }}>
+        AI 推荐提示词
+        <textarea
+          value={form.prompt}
+          onChange={(e) => setForm((p) => ({ ...p, prompt: e.target.value }))}
+          rows={4}
+          placeholder="你是地图馆每日推荐助手..."
+          style={{ width: '100%', marginTop: 4 }}
+        />
+      </label>
+      <div className="settings-hint">AI 会接收当前日期、时间和图库样本，根据此提示词生成推荐语。</div>
+      <div className="settings-actions">
+        <button onClick={save} disabled={saving}>{saving ? '保存中...' : '保存发现设置'}</button>
+      </div>
+      {msg && <div className="settings-line success">{msg}</div>}
+    </div>
+  );
+}
+
 function RssSettings() {
   const [form, setForm] = useState({ enabled: true, title: '', description: '' });
   const [history, setHistory] = useState([]);
@@ -140,6 +188,7 @@ export default function SettingsDialog({
           <button className={tab === 'storage' ? 'active' : ''} onClick={() => setTab('storage')}>存储</button>
           <button className={tab === 'ai' ? 'active' : ''} onClick={() => setTab('ai')}>AI</button>
           <button className={tab === 'ocr' ? 'active' : ''} onClick={() => setTab('ocr')}>OCR</button>
+          <button className={tab === 'discover' ? 'active' : ''} onClick={() => setTab('discover')}>发现</button>
           <button className={tab === 'rss' ? 'active' : ''} onClick={() => setTab('rss')}>RSS</button>
         </div>
         <div className="settings-body">
@@ -248,6 +297,8 @@ export default function SettingsDialog({
               {!ocrStatus?.available ? <div className="settings-tip">请先安装 tesseract（mac: `brew install tesseract tesseract-lang`）。</div> : null}
               <button onClick={handleOcrReindex} disabled={busy || !ocrStatus?.available}>重建 OCR 索引</button>
             </div>
+          ) : tab === 'discover' ? (
+            <DiscoverSettings />
           ) : tab === 'rss' ? (
             <RssSettings />
           ) : null}
