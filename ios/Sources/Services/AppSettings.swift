@@ -50,6 +50,12 @@ final class AppSettings {
   enum AIProvider: String, CaseIterable {
     case deepseek
     case openAI
+    case anthropic
+    case google
+    case moonshot
+    case zhipu
+    case qwen
+    case doubao
     case openAICompatible
 
     var title: String {
@@ -58,6 +64,18 @@ final class AppSettings {
         return "DeepSeek"
       case .openAI:
         return "OpenAI"
+      case .anthropic:
+        return "Anthropic Claude"
+      case .google:
+        return "Google Gemini"
+      case .moonshot:
+        return "Moonshot AI (Kimi)"
+      case .zhipu:
+        return "智谱 AI (GLM)"
+      case .qwen:
+        return "通义千问"
+      case .doubao:
+        return "豆包 (火山引擎)"
       case .openAICompatible:
         return "兼容接口"
       }
@@ -69,6 +87,18 @@ final class AppSettings {
         return "https://api.deepseek.com"
       case .openAI:
         return "https://api.openai.com/v1"
+      case .anthropic:
+        return "https://api.anthropic.com"
+      case .google:
+        return "https://generativelanguage.googleapis.com/v1beta"
+      case .moonshot:
+        return "https://api.moonshot.cn/v1"
+      case .zhipu:
+        return "https://open.bigmodel.cn/api/paas/v4"
+      case .qwen:
+        return "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      case .doubao:
+        return "https://ark.cn-beijing.volces.com/api/v3"
       case .openAICompatible:
         return "https://api.openai.com/v1"
       }
@@ -80,8 +110,80 @@ final class AppSettings {
         return "deepseek-v4-flash"
       case .openAI:
         return "gpt-4.1-mini"
+      case .anthropic:
+        return "claude-sonnet-4-20250514"
+      case .google:
+        return "gemini-2.5-flash"
+      case .moonshot:
+        return "moonshot-v1-128k"
+      case .zhipu:
+        return "glm-4v-flash"
+      case .qwen:
+        return "qwen-vl-max"
+      case .doubao:
+        return ""
       case .openAICompatible:
         return ""
+      }
+    }
+
+    var supportsVision: Bool {
+      switch self {
+      case .deepseek:
+        return false
+      case .openAI, .anthropic, .google, .moonshot, .zhipu, .qwen, .doubao, .openAICompatible:
+        return true
+      }
+    }
+
+    var usesAnthropicFormat: Bool {
+      self == .anthropic
+    }
+
+    var authHeaderName: String {
+      switch self {
+      case .anthropic:
+        return "x-api-key"
+      default:
+        return "Authorization"
+      }
+    }
+
+    var authPrefix: String {
+      switch self {
+      case .anthropic:
+        return ""
+      default:
+        return "Bearer "
+      }
+    }
+
+    var chatPath: String {
+      switch self {
+      case .anthropic:
+        return "/v1/messages"
+      default:
+        return "/chat/completions"
+      }
+    }
+
+    var modelsPath: String {
+      switch self {
+      case .anthropic:
+        return "/v1/models"
+      case .google:
+        return "/openai/models"
+      default:
+        return "/models"
+      }
+    }
+
+    var extraHeaders: [String: String] {
+      switch self {
+      case .anthropic:
+        return ["anthropic-version": "2023-06-01"]
+      default:
+        return [:]
       }
     }
   }

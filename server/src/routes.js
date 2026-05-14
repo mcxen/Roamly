@@ -26,6 +26,12 @@ import {
   getRuntimeSettings,
   getStorageDriver,
   getWebdavSettings,
+  getAISettings,
+  setAISettings,
+  getAIProviderConfigs,
+  saveAIProviderConfig,
+  deleteAIProviderConfig,
+  activateAIProvider,
   setMapLibraryDir,
   setServerMapDir,
   setStorageDriver,
@@ -35,6 +41,16 @@ import {
 import { restartWatcher, stopWatcher } from './watcher.js';
 import { getOcrStatus, queueOcrForCandidates } from './ocr.js';
 import { forceReloadProjectMeta, getProjectStoreStatus, upsertProjectMeta } from './project-store.js';
+import {
+  chatCompletion,
+  chatCompletionStream,
+  extractContent,
+  parseAIJson,
+  fetchModels as aiFetchModels,
+  getProviderList,
+  buildChatEndpoint,
+  PROVIDER_PRESETS
+} from './ai-service.js';
 
 const router = express.Router();
 
@@ -49,6 +65,175 @@ const normalizeNumber = (value, fallback) => {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return fallback;
   return parsed;
+};
+
+const AI_SYSTEM_PROMPT = `你是历史地图编目助手。你只能返回 json，不要输出解释、Markdown 或代码块。无法判断时返回空字符串、空数组或 null，不要编造。`;
+
+const readStreamToBuffer = async (stream) => {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+};
+
+const makeAIImageDataURL = async (row) => {
+  const optimizedPath = await resolveOptimizedLocalImagePath(row, { max: 1280, quality: 68 });
+  if (optimizedPath) {
+    const buffer = await fsp.readFile(optimizedPath);
+    return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+  }
+
+  const stream = getImageStream(row);
+  const buffer = await readStreamToBuffer(stream);
+  const contentType = row.mime || mime.lookup(row.file_name) || 'image/jpeg';
+  return `data:${contentType};base64,${buffer.toString('base64')}`;
+};
+
+const makeAIRecordContext = (record) => JSON.stringify({
+  file_name: record.file_name,
+  title: record.title,
+  description: record.description,
+  scope_level: record.scope_level,
+  country_code: record.country_code,
+  country_name: record.country_name,
+  province: record.province,
+  city: record.city,
+  district: record.district,
+  latitude: record.latitude,
+  longitude: record.longitude,
+  north_latitude: record.north_latitude,
+  south_latitude: record.south_latitude,
+  east_longitude: record.east_longitude,
+  west_longitude: record.west_longitude,
+  coverage_outline: record.coverage_outline,
+  year_label: record.year_label,
+  campaign: record.campaign,
+  teaching_use: record.teaching_use,
+  teaching_note: record.teaching_note,
+  security_level: record.security_level,
+  tags: record.tags,
+  ocr_text: String(record.ocr_text || '').slice(0, 8000)
+}, null, 2);
+
+const makeAIPrompt = (record) => `请基于图片、OCR 和已有元数据提取历史地图编目信息，并严格返回单个 JSON 对象。
+
+原数据 JSON：
+${makeAIRecordContext(record)}
+
+必须返回的 JSON Schema：
+{
+  "title": "string",
+  "description": "string",
+  "year_label": "string",
+  "campaign": "string",
+  "teaching_use": "string",
+  "teaching_note": "string",
+  "security_level": "string",
+  "scope_level": "world|country|province|city|district|region|unknown",
+  "country_code": "string",
+  "country_name": "string",
+  "province": "string",
+  "city": "string",
+  "district": "string",
+  "latitude": 0.0,
+  "longitude": 0.0,
+  "north_latitude": 0.0,
+  "south_latitude": 0.0,
+  "east_longitude": 0.0,
+  "west_longitude": 0.0,
+  "coverage_outline": [{"x":0.0,"y":0.0}],
+  "tags": ["string"]
+}
+
+coverage_outline 是缩略图中主体地图覆盖区域的归一化图像坐标，左上角为 {"x":0,"y":0}，右下角为 {"x":1,"y":1}。请给出 4 到 12 个顺时针或逆时针点；无法精确识别时返回包住主体地图的四点矩形。`;
+
+const pickAIValue = (next, key, current) => {
+  if (next?.[key] === undefined || next?.[key] === null) return current ?? null;
+  if (typeof next[key] === 'string' && !next[key].trim()) return current ?? null;
+  return next[key];
+};
+
+const normalizeCoverageOutline = (value, current) => {
+  if (!Array.isArray(value)) return current ? JSON.stringify(current) : null;
+  const points = value
+    .map((point) => ({
+      x: Math.max(0, Math.min(1, Number(point?.x))),
+      y: Math.max(0, Math.min(1, Number(point?.y)))
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  return points.length >= 3 ? JSON.stringify(points) : (current ? JSON.stringify(current) : null);
+};
+
+const persistAIMapMeta = async (id, aiPayload) => {
+  const row = statements.findById.get(id);
+  if (!row) return null;
+  const current = rowToMap(row);
+  const next = {
+    id,
+    title: pickAIValue(aiPayload, 'title', row.title),
+    description: pickAIValue(aiPayload, 'description', row.description),
+    tags: toTagsJson(Array.isArray(aiPayload?.tags) && aiPayload.tags.length ? aiPayload.tags : current.tags),
+    collection_unit: row.collection_unit,
+    scope_level: pickAIValue(aiPayload, 'scope_level', row.scope_level),
+    country_code: pickAIValue(aiPayload, 'country_code', row.country_code),
+    country_name: pickAIValue(aiPayload, 'country_name', row.country_name),
+    province: pickAIValue(aiPayload, 'province', row.province),
+    related_countries: row.related_countries,
+    related_provinces: row.related_provinces,
+    city: pickAIValue(aiPayload, 'city', row.city),
+    district: pickAIValue(aiPayload, 'district', row.district),
+    latitude: resolveNullableNumber(aiPayload?.latitude, row.latitude),
+    longitude: resolveNullableNumber(aiPayload?.longitude, row.longitude),
+    north_latitude: resolveNullableNumber(aiPayload?.north_latitude, row.north_latitude),
+    south_latitude: resolveNullableNumber(aiPayload?.south_latitude, row.south_latitude),
+    east_longitude: resolveNullableNumber(aiPayload?.east_longitude, row.east_longitude),
+    west_longitude: resolveNullableNumber(aiPayload?.west_longitude, row.west_longitude),
+    coverage_outline: normalizeCoverageOutline(aiPayload?.coverage_outline, current.coverage_outline),
+    year_label: pickAIValue(aiPayload, 'year_label', row.year_label),
+    campaign: pickAIValue(aiPayload, 'campaign', row.campaign),
+    teaching_use: pickAIValue(aiPayload, 'teaching_use', row.teaching_use),
+    teaching_note: pickAIValue(aiPayload, 'teaching_note', row.teaching_note),
+    security_level: pickAIValue(aiPayload, 'security_level', row.security_level),
+    storage_band: row.storage_band,
+    updated_at: new Date().toISOString()
+  };
+
+  statements.updateMapMeta.run(next);
+  const updated = rowToMap(statements.findById.get(id));
+  await upsertProjectMeta({
+    source: updated.source,
+    filePath: updated.file_path,
+    meta: {
+      title: updated.title,
+      description: updated.description,
+      tags: updated.tags,
+      collection_unit: updated.collection_unit,
+      scope_level: updated.scope_level,
+      country_code: updated.country_code,
+      country_name: updated.country_name,
+      province: updated.province,
+      related_countries: updated.related_countries,
+      related_provinces: updated.related_provinces,
+      city: updated.city,
+      district: updated.district,
+      latitude: updated.latitude,
+      longitude: updated.longitude,
+      north_latitude: updated.north_latitude,
+      south_latitude: updated.south_latitude,
+      east_longitude: updated.east_longitude,
+      west_longitude: updated.west_longitude,
+      coverage_outline: updated.coverage_outline,
+      year_label: updated.year_label,
+      campaign: updated.campaign,
+      teaching_use: updated.teaching_use,
+      teaching_note: updated.teaching_note,
+      security_level: updated.security_level,
+      storage_band: updated.storage_band,
+      favorite: updated.favorite
+    }
+  });
+  return updated;
 };
 
 const isUnknownKeyword = (value) => {
@@ -516,6 +701,7 @@ router.get('/status', (_req, res) => {
     mapLibraryDir: runtime.mapLibraryDir,
     serverMapDir: runtime.serverMapDir,
     webdav: runtime.webdav,
+    ai: runtime.ai,
     watchLibrary: config.watchLibrary,
     ocr: getOcrStatus(),
     project: getProjectStoreStatus()
@@ -534,6 +720,268 @@ router.post('/ocr/reindex', (req, res) => {
   const limit = Math.min(Math.max(normalizeNumber(req.body?.limit, 600), 1), 6000);
   const result = queueOcrForCandidates({ force, limit });
   res.json({ ok: true, ...result, status: getOcrStatus() });
+});
+
+router.get('/ai/settings', (_req, res) => {
+  res.json({
+    ok: true,
+    ...getAISettings(false)
+  });
+});
+
+router.post('/ai/settings', (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      ...setAISettings(req.body || {})
+    });
+  } catch (err) {
+    logger.error({ err }, 'Save AI settings failed');
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/ai/providers', (_req, res) => {
+  res.json({
+    ok: true,
+    providers: getProviderList()
+  });
+});
+
+router.post('/ai/models', async (req, res) => {
+  try {
+    const saved = getAISettings(true);
+    const body = req.body || {};
+    const provider = String(body.provider || saved.provider || 'openai-compatible').trim();
+    const apiUrl = String(body.apiUrl || saved.apiUrl || '').trim();
+    const apiKey = body.apiKey !== undefined
+      ? String(body.apiKey || '').trim()
+      : String(saved.apiKey || '').trim();
+
+    const models = await aiFetchModels({ provider, apiUrl, apiKey });
+    res.json({
+      ok: true,
+      total: models.length,
+      models
+    });
+  } catch (err) {
+    logger.error({ err }, 'Fetch AI models failed');
+    const status = err.message.includes('HTTP') ? 502 : 500;
+    res.status(status).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/ai/chat', async (req, res) => {
+  try {
+    const settings = getAISettings(true);
+    const body = req.body || {};
+    const provider = String(body.provider || settings.provider || 'openai-compatible').trim();
+    const apiUrl = String(body.apiUrl || settings.apiUrl || '').trim();
+    const apiKey = body.apiKey !== undefined
+      ? String(body.apiKey || '').trim()
+      : String(settings.apiKey || '').trim();
+    const model = String(body.model || settings.model || '').trim();
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    const stream = Boolean(body.stream);
+
+    if (!messages.length) {
+      res.status(400).json({ ok: false, error: '消息不能为空。' });
+      return;
+    }
+
+    if (stream) {
+      const result = await chatCompletionStream({
+        provider, apiUrl, apiKey, model, messages,
+        options: {
+          maxTokens: body.maxTokens,
+          temperature: body.temperature
+        }
+      });
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+
+      const reader = result.body;
+      reader.on('data', (chunk) => {
+        res.write(chunk);
+      });
+      reader.on('end', () => {
+        res.end();
+      });
+      reader.on('error', (err) => {
+        logger.error({ err }, 'AI stream error');
+        res.end();
+      });
+    } else {
+      const data = await chatCompletion({
+        provider, apiUrl, apiKey, model, messages,
+        options: {
+          maxTokens: body.maxTokens,
+          temperature: body.temperature,
+          responseFormat: body.responseFormat
+        }
+      });
+
+      res.json({ ok: true, ...data });
+    }
+  } catch (err) {
+    logger.error({ err }, 'AI chat failed');
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/ai/maps/:id/extract', async (req, res) => {
+  try {
+    const row = statements.findById.get(req.params.id);
+    if (!row) {
+      res.status(404).json({ ok: false, error: 'not_found' });
+      return;
+    }
+
+    const settings = getAISettings(true);
+    const current = rowToMap(row);
+    const content = [
+      { type: 'text', text: makeAIPrompt(current) }
+    ];
+    if (req.body?.includeImage !== false) {
+      const imageUrl = await makeAIImageDataURL(row);
+      content.push({
+        type: 'image_url',
+        image_url: { url: imageUrl }
+      });
+    }
+
+    const messages = [
+      { role: 'system', content: settings.systemPrompt || AI_SYSTEM_PROMPT },
+      { role: 'user', content }
+    ];
+
+    const data = await chatCompletion({
+      provider: settings.provider,
+      apiUrl: settings.apiUrl,
+      apiKey: settings.apiKey,
+      model: settings.model,
+      messages
+    });
+
+    const parsed = parseAIJson(extractContent(data));
+    const updated = await persistAIMapMeta(req.params.id, parsed);
+    res.json({
+      ok: true,
+      item: updated,
+      ai: parsed
+    });
+  } catch (err) {
+    logger.error({ err, id: req.params.id }, 'AI map extraction failed');
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/ai/maps/batch-extract', async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const limit = Math.min(ids.length || 10, 20);
+    const includeImage = req.body?.includeImage !== false;
+
+    if (!ids.length) {
+      res.status(400).json({ ok: false, error: '请提供要提取的地图 ID 列表。' });
+      return;
+    }
+
+    const settings = getAISettings(true);
+    const results = [];
+    const errors = [];
+
+    for (const id of ids.slice(0, limit)) {
+      try {
+        const row = statements.findById.get(id);
+        if (!row) {
+          errors.push({ id, error: 'not_found' });
+          continue;
+        }
+
+        const current = rowToMap(row);
+        const content = [
+          { type: 'text', text: makeAIPrompt(current) }
+        ];
+        if (includeImage) {
+          const imageUrl = await makeAIImageDataURL(row);
+          content.push({
+            type: 'image_url',
+            image_url: { url: imageUrl }
+          });
+        }
+
+        const messages = [
+          { role: 'system', content: settings.systemPrompt || AI_SYSTEM_PROMPT },
+          { role: 'user', content }
+        ];
+
+        const data = await chatCompletion({
+          provider: settings.provider,
+          apiUrl: settings.apiUrl,
+          apiKey: settings.apiKey,
+          model: settings.model,
+          messages
+        });
+
+        const parsed = parseAIJson(extractContent(data));
+        const updated = await persistAIMapMeta(id, parsed);
+        results.push({ id, item: updated, ai: parsed });
+      } catch (err) {
+        logger.error({ err, id }, 'Batch AI extraction failed for item');
+        errors.push({ id, error: err.message });
+      }
+    }
+
+    res.json({
+      ok: true,
+      total: results.length,
+      results,
+      errors: errors.length ? errors : undefined
+    });
+  } catch (err) {
+    logger.error({ err }, 'Batch AI extraction failed');
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/ai/test', async (req, res) => {
+  try {
+    const settings = getAISettings(true);
+    const body = req.body || {};
+    const provider = String(body.provider || settings.provider || 'openai-compatible').trim();
+    const apiUrl = String(body.apiUrl || settings.apiUrl || '').trim();
+    const apiKey = body.apiKey !== undefined
+      ? String(body.apiKey || '').trim()
+      : String(settings.apiKey || '').trim();
+    const model = String(body.model || settings.model || '').trim();
+
+    const startTime = Date.now();
+    const data = await chatCompletion({
+      provider, apiUrl, apiKey, model,
+      messages: [
+        { role: 'user', content: '请回复 "OK"，不要输出其他内容。' }
+      ],
+      options: { maxTokens: 10 }
+    });
+
+    const elapsed = Date.now() - startTime;
+    const content = extractContent(data);
+
+    res.json({
+      ok: true,
+      latency: elapsed,
+      response: content.trim(),
+      model: data.model || model,
+      usage: data.usage || null
+    });
+  } catch (err) {
+    logger.error({ err }, 'AI test failed');
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 router.get('/storage/settings', (_req, res) => {
@@ -712,6 +1160,36 @@ router.get('/maps', (req, res) => {
     limit,
     hasMore: page * limit < total
   });
+});
+
+router.get('/maps/stats', (req, res) => {
+  const total = dbInstance.prepare('SELECT COUNT(*) AS c FROM maps').get().c;
+  const favorites = dbInstance.prepare("SELECT COUNT(*) AS c FROM maps WHERE favorite = 1").get().c;
+  const withOcr = dbInstance.prepare("SELECT COUNT(*) AS c FROM maps WHERE ocr_status = 'done'").get().c;
+  const withBounds = dbInstance.prepare("SELECT COUNT(*) AS c FROM maps WHERE north_latitude IS NOT NULL AND south_latitude IS NOT NULL").get().c;
+  const withCoords = dbInstance.prepare("SELECT COUNT(*) AS c FROM maps WHERE latitude IS NOT NULL AND longitude IS NOT NULL").get().c;
+  const withAI = dbInstance.prepare("SELECT COUNT(*) AS c FROM maps WHERE coverage_outline IS NOT NULL AND coverage_outline != ''").get().c;
+
+  const storageBands = dbInstance.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(storage_band), ''), '未设置') AS band, COUNT(*) AS count
+    FROM maps GROUP BY band ORDER BY count DESC
+  `).all();
+
+  const countries = dbInstance.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(country_name), ''), '未设置') AS name, COUNT(*) AS count
+    FROM maps GROUP BY name ORDER BY count DESC LIMIT 10
+  `).all();
+
+  const decades = dbInstance.prepare(`
+    SELECT CASE
+      WHEN year_label IS NULL OR TRIM(year_label) = '' THEN '未知'
+      WHEN CAST(year_label AS INTEGER) > 0 THEN (CAST(year_label AS INTEGER) / 10 * 10) || 's'
+      ELSE year_label
+    END AS decade, COUNT(*) AS count
+    FROM maps GROUP BY decade ORDER BY decade
+  `).all();
+
+  res.json({ total, favorites, withOcr, withBounds, withCoords, withAI, storageBands, countries, decades });
 });
 
 router.get('/maps/facets', (req, res) => {

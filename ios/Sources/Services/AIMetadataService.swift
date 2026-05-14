@@ -199,18 +199,27 @@ final class AIMetadataService {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    if !settings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      request.setValue("Bearer \(settings.aiAPIKey)", forHTTPHeaderField: "Authorization")
-    }
+    applyAuthHeaders(to: &request)
 
-    let body: [String: Any] = [
-      "model": settings.aiModel,
-      "response_format": ["type": "json_object"],
-      "messages": [
-        ["role": "system", "content": "你只能返回 JSON。"],
-        ["role": "user", "content": "返回 {\"ok\":true}"]
+    let body: [String: Any]
+    if settings.aiProvider.usesAnthropicFormat {
+      body = [
+        "model": settings.aiModel,
+        "max_tokens": 10,
+        "messages": [
+          ["role": "user", "content": "返回 OK"]
+        ]
       ]
-    ]
+    } else {
+      body = [
+        "model": settings.aiModel,
+        "response_format": ["type": "json_object"],
+        "messages": [
+          ["role": "system", "content": "你只能返回 JSON。"],
+          ["role": "user", "content": "返回 {\"ok\":true}"]
+        ]
+      ]
+    }
     request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
 
     let start = Date()
@@ -230,19 +239,19 @@ final class AIMetadataService {
       throw APIClient.APIError.requestFailed("请先在设置页填写 AI API URL。")
     }
     guard !settings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-      throw APIClient.APIError.requestFailed("请先填写 OpenAI API Key。")
+      throw APIClient.APIError.requestFailed("请先填写 API Key。")
     }
 
     var request = URLRequest(url: endpoint)
     request.httpMethod = "GET"
-    request.setValue("Bearer \(settings.aiAPIKey)", forHTTPHeaderField: "Authorization")
+    applyAuthHeaders(to: &request)
 
     let (data, response) = try await session.data(for: request)
     guard let httpResponse = response as? HTTPURLResponse else {
       throw APIClient.APIError.invalidResponse
     }
     guard (200 ..< 300).contains(httpResponse.statusCode) else {
-      let text = String(data: data, encoding: .utf8) ?? "OpenAI model request failed"
+      let text = String(data: data, encoding: .utf8) ?? "Model request failed"
       throw APIClient.APIError.requestFailed(text)
     }
 
@@ -288,8 +297,17 @@ final class AIMetadataService {
   private func makeEndpoint() -> URL? {
     guard let rawURL = settings.aiAPIURL else { return nil }
     let path = rawURL.path.lowercased()
-    if path.hasSuffix("/chat/completions") {
+    if path.hasSuffix("/chat/completions") || path.hasSuffix("/v1/messages") {
       return rawURL
+    }
+    let chatPath = settings.aiProvider.chatPath
+    if chatPath.hasPrefix("/") {
+      // For providers with absolute paths (like Anthropic /v1/messages), append to base
+      let basePath = rawURL.path.replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
+      if basePath.hasSuffix(chatPath) {
+        return rawURL
+      }
+      return rawURL.appendingPathComponent(chatPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
     }
     return rawURL.appendingPathComponent("chat").appendingPathComponent("completions")
   }
@@ -306,7 +324,13 @@ final class AIMetadataService {
         .deletingLastPathComponent()
         .appendingPathComponent("models")
     }
-    return rawURL.appendingPathComponent("models")
+    if path.hasSuffix("/v1/messages") {
+      return rawURL
+        .deletingLastPathComponent()
+        .appendingPathComponent("models")
+    }
+    let modelsPath = settings.aiProvider.modelsPath
+    return rawURL.appendingPathComponent(modelsPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
   }
 
   private func requestMetadataPipeline(
@@ -331,20 +355,25 @@ final class AIMetadataService {
     var request = URLRequest(url: endpoint)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    if !settings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      request.setValue("Bearer \(settings.aiAPIKey)", forHTTPHeaderField: "Authorization")
-    }
+    applyAuthHeaders(to: &request)
 
     let userPrompt = makeUserPrompt(for: record, step: step)
     let userContent = makeUserContent(for: record, prompt: userPrompt, includesImage: step.includesImage)
-    let body: [String: Any] = [
-      "model": settings.aiModel,
-      "response_format": ["type": "json_object"],
-      "messages": [
-        ["role": "system", "content": systemPrompt(for: step)],
-        ["role": "user", "content": userContent]
+
+    let body: [String: Any]
+    if settings.aiProvider.usesAnthropicFormat {
+      body = buildAnthropicBody(systemPrompt: systemPrompt(for: step), userContent: userContent)
+    } else {
+      body = [
+        "model": settings.aiModel,
+        "response_format": ["type": "json_object"],
+        "messages": [
+          ["role": "system", "content": systemPrompt(for: step)],
+          ["role": "user", "content": userContent]
+        ]
       ]
-    ]
+    }
+
     let logID = logStore.start(
       title: "AI 编目·\(step.title)：\(record.title)",
       provider: settings.aiProvider.title,
@@ -367,7 +396,12 @@ final class AIMetadataService {
         throw APIClient.APIError.requestFailed(text)
       }
 
-      let content = try extractContent(from: data)
+      let content: String
+      if settings.aiProvider.usesAnthropicFormat {
+        content = try extractAnthropicContent(from: data)
+      } else {
+        content = try extractContent(from: data)
+      }
       let jsonData = try normalizeJSONPayload(content)
       let decoded = try JSONDecoder().decode(AIResponse.self, from: jsonData)
       logStore.succeed(
@@ -406,6 +440,53 @@ final class AIMetadataService {
     }
 
     throw APIClient.APIError.invalidResponse
+  }
+
+  private func extractAnthropicContent(from data: Data) throws -> String {
+    guard
+      let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let contentArray = root["content"] as? [[String: Any]]
+    else {
+      throw APIClient.APIError.invalidResponse
+    }
+
+    let textParts = contentArray
+      .filter { ($0["type"] as? String) == "text" }
+      .compactMap { $0["text"] as? String }
+
+    let text = textParts.joined()
+    guard !text.isEmpty else {
+      throw APIClient.APIError.invalidResponse
+    }
+    return text
+  }
+
+  private func applyAuthHeaders(to request: inout URLRequest) {
+    let key = settings.aiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !key.isEmpty else { return }
+
+    let provider = settings.aiProvider
+    let headerName = provider.authHeaderName
+    let prefix = provider.authPrefix
+    request.setValue("\(prefix)\(key)", forHTTPHeaderField: headerName)
+
+    for (name, value) in provider.extraHeaders {
+      request.setValue(value, forHTTPHeaderField: name)
+    }
+  }
+
+  private func buildAnthropicBody(systemPrompt: String, userContent: Any) -> [String: Any] {
+    var body: [String: Any] = [
+      "model": settings.aiModel,
+      "max_tokens": 4096,
+      "messages": [
+        ["role": "user", "content": userContent]
+      ]
+    ]
+    if !systemPrompt.isEmpty {
+      body["system"] = systemPrompt
+    }
+    return body
   }
 
   private func normalizeJSONPayload(_ content: String) throws -> Data {
@@ -562,8 +643,30 @@ final class AIMetadataService {
   }
 
   private func makeUserContent(for record: MapRecord, prompt: String, includesImage: Bool) -> Any {
-    guard settings.aiProvider != .deepseek else {
-      return "\(prompt)\n\n当前供应商 DeepSeek 仅使用文本消息。请基于 OCR、文件名和已有元数据尽力估算；无法判断时按本步骤规则返回。"
+    guard settings.aiProvider.supportsVision else {
+      return "\(prompt)\n\n当前供应商不支持图片输入。请基于 OCR、文件名和已有元数据尽力估算；无法判断时按本步骤规则返回。"
+    }
+
+    if settings.aiProvider.usesAnthropicFormat {
+      var content: [[String: Any]] = [
+        ["type": "text", "text": prompt]
+      ]
+      if includesImage, let imageURL = makeCompressedImageDataURL(for: record) {
+        let match = imageURL.range(of: "^data:([^;]+);base64,(.+)$", options: .regularExpression)
+        if match != nil {
+          let mediaType = String(imageURL[imageURL.index(imageURL.startIndex, offsetBy: 5)..<imageURL.range(of: ";base64,")!.lowerBound])
+          let base64Data = String(imageURL[imageURL.range(of: ";base64,")!.upperBound...])
+          content.append([
+            "type": "image",
+            "source": [
+              "type": "base64",
+              "media_type": mediaType,
+              "data": base64Data
+            ]
+          ])
+        }
+      }
+      return content
     }
 
     var content: [[String: Any]] = [
@@ -871,11 +974,6 @@ final class AIMetadataService {
 
   private static func isLikelyChatModel(_ id: String) -> Bool {
     let lower = id.lowercased()
-    let include = lower.hasPrefix("gpt-") ||
-      lower.hasPrefix("o1") ||
-      lower.hasPrefix("o3") ||
-      lower.hasPrefix("o4") ||
-      lower.hasPrefix("chatgpt-")
     let blockedTerms = [
       "audio",
       "realtime",
@@ -888,7 +986,23 @@ final class AIMetadataService {
       "dall-e",
       "sora"
     ]
-    return include && !blockedTerms.contains { lower.contains($0) }
+    if blockedTerms.contains(where: { lower.contains($0) }) {
+      return false
+    }
+
+    // Known chat model prefixes
+    let chatPrefixes = [
+      "gpt-", "o1", "o3", "o4", "chatgpt-",
+      "claude-", "deepseek-", "moonshot-",
+      "glm-", "qwen-", "gemini-",
+      "kimi-", "doubao-"
+    ]
+    if chatPrefixes.contains(where: { lower.hasPrefix($0) }) {
+      return true
+    }
+
+    // If no prefix matches, include it (might be a custom model)
+    return true
   }
 
   private static func sortedModelIDs(_ ids: [String]) -> [String] {
@@ -913,6 +1027,17 @@ final class AIMetadataService {
     if lower.hasPrefix("o4") { return 6 }
     if lower.hasPrefix("o3") { return 7 }
     if lower.hasPrefix("o1") { return 8 }
+    if lower.contains("claude-sonnet-4") { return 3 }
+    if lower.contains("claude-opus-4") { return 2 }
+    if lower.contains("claude-3") { return 9 }
+    if lower.hasPrefix("gemini-2") { return 5 }
+    if lower.hasPrefix("gemini-1") { return 10 }
+    if lower.hasPrefix("deepseek-v4") { return 4 }
+    if lower.hasPrefix("deepseek-v3") { return 6 }
+    if lower.hasPrefix("kimi-k2") { return 4 }
+    if lower.hasPrefix("qwen-vl-max") { return 5 }
+    if lower.hasPrefix("glm-4v") { return 6 }
+    if lower.hasPrefix("moonshot-") { return 8 }
     return 20
   }
 

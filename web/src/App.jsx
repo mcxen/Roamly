@@ -1,63 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ReactECharts from 'echarts-for-react';
-import * as echarts from 'echarts';
-import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
-import { feature } from 'topojson-client';
-import chinaGeoJson from 'china-map-geojson/src/china.js';
-import usAtlasData from 'us-atlas/states-10m.json';
 import { api } from './api.js';
-import GlobeCountryPicker from './GlobeCountryPicker.jsx';
-
-const US_STATES_GEOJSON = usAtlasData?.objects?.states
-  ? feature(usAtlasData, usAtlasData.objects.states)
-  : null;
-
-const REGISTERED_MAPS = new Set();
-const ensureMapRegistered = (name, geojson) => {
-  if (!name || !geojson || REGISTERED_MAPS.has(name)) return;
-  echarts.registerMap(name, geojson);
-  REGISTERED_MAPS.add(name);
-};
-
-const COUNTRY_NAME_ZH = {
-  China: '中国',
-  Japan: '日本',
-  'United States of America': '美国',
-  Russia: '俄罗斯',
-  'United Kingdom': '英国',
-  France: '法国',
-  Germany: '德国',
-  'South Korea': '韩国',
-  'North Korea': '朝鲜',
-  India: '印度',
-  Canada: '加拿大',
-  Australia: '澳大利亚',
-  Brazil: '巴西',
-  Italy: '意大利',
-  Spain: '西班牙',
-  Mexico: '墨西哥',
-  Mongolia: '蒙古国',
-  Kazakhstan: '哈萨克斯坦',
-  Ukraine: '乌克兰',
-  Poland: '波兰',
-  Turkey: '土耳其',
-  Egypt: '埃及',
-  Iran: '伊朗',
-  Iraq: '伊拉克',
-  Afghanistan: '阿富汗',
-  Pakistan: '巴基斯坦',
-  Thailand: '泰国',
-  Vietnam: '越南',
-  Indonesia: '印度尼西亚',
-  Malaysia: '马来西亚',
-  Philippines: '菲律宾',
-  Myanmar: '缅甸',
-  Singapore: '新加坡',
-  'South Africa': '南非',
-  Argentina: '阿根廷',
-  Chile: '智利',
-  Peru: '秘鲁'
-};
+import FileManager from './components/FileManager.jsx';
+import SettingsDialog from './components/SettingsDialog.jsx';
+import ImageViewer from './components/ImageViewer.jsx';
+import DetailPane from './components/DetailPane.jsx';
+import StatsPanel from './components/StatsPanel.jsx';
 
 const STORAGE_BAND_OPTIONS = [
   { value: '', label: '未设置' },
@@ -69,84 +16,6 @@ const STORAGE_BAND_OPTIONS = [
   { value: 'blue', label: '蓝条' },
   { value: 'purple', label: '紫条' }
 ];
-
-const CHINA_PROVINCE_ALIASES = new Map([
-  ['内蒙古自治区', '内蒙古'],
-  ['广西壮族自治区', '广西'],
-  ['宁夏回族自治区', '宁夏'],
-  ['新疆维吾尔自治区', '新疆'],
-  ['西藏自治区', '西藏'],
-  ['香港特别行政区', '香港'],
-  ['澳门特别行政区', '澳门'],
-  ['北京市', '北京'],
-  ['天津市', '天津'],
-  ['上海市', '上海'],
-  ['重庆市', '重庆'],
-  ['台湾省', '台湾']
-]);
-
-const normalizeChinaProvince = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  if (CHINA_PROVINCE_ALIASES.has(raw)) return CHINA_PROVINCE_ALIASES.get(raw);
-  return raw.replace(/(省|市|自治区|特别行政区|壮族自治区|回族自治区|维吾尔自治区)$/u, '');
-};
-
-const filterUSContiguous = (geojson) => {
-  if (!geojson || !Array.isArray(geojson.features)) return geojson;
-  const excludedIds = new Set(['02', '15', '72']);
-  const excludedNames = new Set(['Alaska', 'Hawaii', 'Puerto Rico']);
-  const features = geojson.features.filter((item) => {
-    const id = item?.id ? String(item.id).padStart(2, '0') : '';
-    const name = String(item?.properties?.name || '');
-    if (excludedIds.has(id)) return false;
-    if (excludedNames.has(name)) return false;
-    return true;
-  });
-  return { ...geojson, features };
-};
-
-const REGION_2D_CONFIGS = [
-  {
-    key: 'china',
-    label: '中国省份 2D',
-    matches: ['中国', 'china', 'China'],
-    mapName: 'china-provinces',
-    geojson: chinaGeoJson,
-    normalize: normalizeChinaProvince
-  },
-  {
-    key: 'us',
-    label: '美国本土州级 2D',
-    matches: ['美国', 'us', 'usa', 'United States', 'United States of America'],
-    mapName: 'us-states-contiguous',
-    geojson: filterUSContiguous(US_STATES_GEOJSON),
-    normalize: (value) => String(value || '').trim()
-  },
-  {
-    key: 'japan',
-    label: '日本都道府县 2D',
-    matches: ['日本', 'japan', 'Japan'],
-    mapName: 'japan-pref',
-    geojson: null,
-    normalize: (value) => String(value || '').trim(),
-    emptyHint: '缺少日本都道府县边界数据，补充 GeoJSON 后即可启用 2D。'
-  },
-  {
-    key: 'russia',
-    label: '俄罗斯联邦主体 2D',
-    matches: ['俄罗斯', 'russia', 'Russia', 'Russian Federation'],
-    mapName: 'russia-subjects',
-    geojson: null,
-    normalize: (value) => String(value || '').trim(),
-    emptyHint: '缺少俄罗斯联邦主体边界数据，补充 GeoJSON 后即可启用 2D。'
-  }
-];
-
-const toCountryLabel = (name) => {
-  const raw = String(name || '').trim();
-  return COUNTRY_NAME_ZH[raw] || raw;
-};
 
 const DEFAULT_FILTERS = {
   q: '',
@@ -217,6 +86,26 @@ const DEFAULT_STORAGE_FORM = {
   }
 };
 
+const DEFAULT_AI_FORM = {
+  apiUrl: '',
+  apiKey: '',
+  model: '',
+  provider: 'openai-compatible',
+  systemPrompt: ''
+};
+
+const AI_PROVIDER_OPTIONS = [
+  { value: 'openai-compatible', label: 'OpenAI 兼容（自定义）' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic Claude' },
+  { value: 'google', label: 'Google Gemini' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'moonshot', label: 'Moonshot AI (Kimi)' },
+  { value: 'zhipu', label: '智谱 AI (GLM)' },
+  { value: 'qwen', label: '通义千问' },
+  { value: 'doubao', label: '豆包 (火山引擎)' }
+];
+
 const DEFAULT_UI_SETTINGS = {
   thumbnailLabelVisible: true,
   thumbnailLabelSize: 14,
@@ -233,10 +122,7 @@ const LAYOUT_MIN_CENTER = 420;
 const LAYOUT_COLUMN_GAP = 6;
 const LAYOUT_RESIZER_WIDTH = 8;
 const LAYOUT_GUTTERS = LAYOUT_RESIZER_WIDTH + LAYOUT_COLUMN_GAP * 2;
-const GLOBE_DOCK_MARGIN = 8;
-const GLOBE_TOGGLE_WIDTH = 34;
 const LAYOUT_BASE_PADDING = 10;
-const GLOBE_TOGGLE_OFFSET = Math.max(0, GLOBE_DOCK_MARGIN + GLOBE_TOGGLE_WIDTH - LAYOUT_BASE_PADDING);
 
 const buildFileUrl = (id, params = {}) => {
   const safeId = encodeURIComponent(String(id || '').trim());
@@ -320,98 +206,27 @@ const buildOcrHighlights = (map, keyword) => {
   return map.ocr_blocks.filter((item) => String(item?.text || '').toLowerCase().includes(q));
 };
 
-function Region2DMap({ config, data, onPickRegion }) {
-  useEffect(() => {
-    if (config?.geojson) {
-      ensureMapRegistered(config.mapName, config.geojson);
-    }
-  }, [config]);
+const normalizeOutlinePoints = (outline) => {
+  if (!Array.isArray(outline)) return [];
+  return outline
+    .map((point) => ({
+      x: clamp(Number(point?.x), 0, 1),
+      y: clamp(Number(point?.y), 0, 1)
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+};
 
-  const option = useMemo(() => {
-    if (!config) return null;
-    const values = data.map((item) => item.value || 0);
-    const maxValue = values.length ? Math.max(...values) : 0;
-    const visualMax = Math.max(1, maxValue);
-
-    return {
-      tooltip: {
-        trigger: 'item',
-        formatter: (params) => {
-          const value = params?.value ?? 0;
-          return `${params.name || ''} ${value || 0}`;
-        }
-      },
-      visualMap: {
-        min: 0,
-        max: visualMax,
-        show: false,
-        inRange: {
-          color: ['#edf2ee', '#b9d3c0', '#5b9170']
-        }
-      },
-      series: [
-        {
-          type: 'map',
-          map: config.mapName,
-          data,
-          roam: false,
-          label: {
-            show: false
-          },
-          itemStyle: {
-            areaColor: '#edf2ee',
-            borderColor: '#9aa89a',
-            borderWidth: 0.6
-          },
-          emphasis: {
-            label: {
-              show: true,
-              color: '#2f3a33',
-              fontSize: 10
-            },
-            itemStyle: {
-              areaColor: '#5b9170'
-            }
-          }
-        }
-      ]
-    };
-  }, [config, data]);
-
-  if (!config) return null;
-  if (!config.geojson) {
-    return (
-      <div className="region-2d-empty">
-        {config.emptyHint || '暂无省级边界数据，补充 GeoJSON 后即可启用 2D。'}
-      </div>
-    );
-  }
-  if (!option) return null;
-
-  return (
-    <ReactECharts
-      echarts={echarts}
-      option={option}
-      style={{ height: 240, width: '100%' }}
-      notMerge
-      lazyUpdate
-      onEvents={onPickRegion
-        ? {
-          click: (params) => {
-            if (params?.name) {
-              onPickRegion(params.name);
-            }
-          }
-        }
-        : undefined}
-    />
-  );
-}
+const outlineToSvgPoints = (outline) => normalizeOutlinePoints(outline)
+  .map((point) => `${(point.x * 100).toFixed(2)},${(point.y * 100).toFixed(2)}`)
+  .join(' ');
 
 function App() {
   const [status, setStatus] = useState(null);
   const [ocrStatus, setOcrStatus] = useState(null);
+  const [stats, setStats] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('library');
+  const [mcpInfo, setMcpInfo] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [queryInput, setQueryInput] = useState('');
   const [maps, setMaps] = useState([]);
@@ -443,23 +258,23 @@ function App() {
     children: []
   });
   const [storageForm, setStorageForm] = useState(DEFAULT_STORAGE_FORM);
+  const [aiForm, setAIForm] = useState(DEFAULT_AI_FORM);
+  const [aiBusy, setAIBusy] = useState(false);
+  const [aiModels, setAIModels] = useState([]);
+  const [aiModelsBusy, setAIModelsBusy] = useState(false);
+  const [aiTestResult, setAITestResult] = useState(null);
+  const [aiTestBusy, setAITestBusy] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [uiSettings, setUiSettings] = useState(() => loadJsonFromStorage('roamly-ui-settings', DEFAULT_UI_SETTINGS));
   const [paneSizes, setPaneSizes] = useState(() => loadJsonFromStorage('roamly-pane-sizes', DEFAULT_PANE_SIZES));
   const [resizingPane, setResizingPane] = useState('');
-  const [globeOpen, setGlobeOpen] = useState(true);
-  const [globeDock, setGlobeDock] = useState({ x: 12, y: 82, side: 'left' });
-  const [globeSize, setGlobeSize] = useState({ width: 340, height: 520 });
-  const [globeDragging, setGlobeDragging] = useState(false);
   const [layoutContentWidth, setLayoutContentWidth] = useState(0);
 
   const layoutRef = useRef(null);
   const resizeStateRef = useRef(null);
-  const globeRef = useRef(null);
-  const globeDragRef = useRef(null);
-  const globeDockRef = useRef(globeDock);
+  const aiModelsKeyRef = useRef('');
 
   const getLayoutContentWidth = useCallback(() => {
     const node = layoutRef.current;
@@ -471,30 +286,6 @@ function App() {
   }, []);
 
   const selectedSummary = useMemo(() => maps.find((item) => item.id === selectedId) || null, [maps, selectedId]);
-  const globePoints = useMemo(() => {
-    const activeId = selectedSummary?.id || selectedMap?.id || '';
-    return maps
-      .filter((item) => Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude)))
-      .slice(0, 32)
-      .map((item) => {
-        const baseLabel = String(
-          item.city
-          || item.province
-          || item.country_name
-          || item.title
-          || item.file_name
-          || ''
-        ).trim();
-
-        return {
-          id: item.id,
-          latitude: Number(item.latitude),
-          longitude: Number(item.longitude),
-          label: baseLabel ? baseLabel.slice(0, 14) : '',
-          active: item.id === activeId
-        };
-      });
-  }, [maps, selectedMap?.id, selectedSummary?.id]);
   const detailImageSrc = useMemo(() => {
     if (!selectedMap?.id) return '';
     return buildFileUrl(selectedMap.id, { v: selectedMap?.mtime_ms || '' });
@@ -504,6 +295,8 @@ function App() {
     return buildFileUrl(selectedMap.id, { v: selectedMap?.mtime_ms || '' });
   }, [selectedMap?.id, selectedMap?.mtime_ms]);
   const ocrHighlights = useMemo(() => buildOcrHighlights(selectedMap, filters.q || queryInput), [selectedMap, filters.q, queryInput]);
+  const coverageOutlinePoints = useMemo(() => outlineToSvgPoints(selectedMap?.coverage_outline), [selectedMap?.coverage_outline]);
+  const hasCoverageOutline = Boolean(coverageOutlinePoints);
 
   const cardGridStyle = useMemo(() => ({
     '--thumb-height': `${clamp(Number(uiSettings.thumbnailHeight) || 160, 10, 320)}px`,
@@ -526,13 +319,6 @@ function App() {
     return Math.max(1, pages);
   }, [total, pageSize]);
 
-  const globeOffsetLeft = globeDock.side === 'left'
-    ? (globeOpen ? Math.max(0, globeSize.width + GLOBE_TOGGLE_OFFSET) : GLOBE_TOGGLE_OFFSET)
-    : 0;
-  const globeOffsetRight = globeDock.side === 'right'
-    ? (globeOpen ? Math.max(0, globeSize.width + GLOBE_TOGGLE_OFFSET) : GLOBE_TOGGLE_OFFSET)
-    : 0;
-
   const maxRightPaneWidth = useMemo(() => {
     if (!layoutContentWidth) return 900;
     const available = layoutContentWidth - LAYOUT_MIN_CENTER - LAYOUT_GUTTERS;
@@ -545,73 +331,8 @@ function App() {
   }, [paneSizes.right, maxRightPaneWidth]);
 
   const layoutStyle = useMemo(() => ({
-    '--right-pane-width': `${rightPaneWidth}px`,
-    '--globe-offset-left': `${globeOffsetLeft}px`,
-    '--globe-offset-right': `${globeOffsetRight}px`
-  }), [rightPaneWidth, globeOffsetLeft, globeOffsetRight]);
-
-  const provinceOptions = useMemo(() => {
-    const items = Array.isArray(facets.province) ? facets.province : [];
-    const seen = new Set();
-    const options = [];
-
-    for (const item of items) {
-      const raw = String(item?.value || '').trim();
-      if (!raw) continue;
-      const isUnknown = raw.toLowerCase() === 'unknown' || raw === '未知' || raw === '未设置';
-      const label = isUnknown ? '未设置' : raw;
-      const value = isUnknown ? '未设置' : raw;
-      if (seen.has(value)) continue;
-      seen.add(value);
-      options.push({ label, value, count: item?.count || 0 });
-    }
-
-    return options;
-  }, [facets.province]);
-
-  const activeCountryLabel = String(filters.country || '').trim() || '全部';
-  const provinceEnabled = Boolean(filters.country) && String(filters.country).trim() !== '全球';
-  const isChinaSelected = ['中国', 'china', 'China'].includes(String(filters.country || '').trim());
-  const fallbackChinaProvinces = useMemo(() => {
-    if (!chinaCityOptions.length) return [];
-    const seen = new Set();
-    const options = [];
-    for (const item of chinaCityOptions) {
-      const raw = String(item?.province || '').trim();
-      if (!raw || seen.has(raw)) continue;
-      seen.add(raw);
-      options.push({ label: raw, value: raw, count: 0 });
-    }
-    return options;
-  }, [chinaCityOptions]);
-  const effectiveProvinceOptions = provinceOptions.length
-    ? provinceOptions
-    : (isChinaSelected ? fallbackChinaProvinces : []);
-
-  const region2DConfig = useMemo(() => resolveRegionConfig(filters.country), [filters.country]);
-  const region2DData = useMemo(() => {
-    if (!region2DConfig) return [];
-    const items = Array.isArray(facets.province) ? facets.province : [];
-    const normalize = region2DConfig.normalize || ((value) => String(value || '').trim());
-    const counts = new Map();
-
-    for (const item of items) {
-      const raw = String(item?.value || '').trim();
-      if (!raw) continue;
-      const isUnknown = raw.toLowerCase() === 'unknown' || raw === '未知' || raw === '未设置';
-      if (isUnknown) continue;
-      const normalized = normalize(raw);
-      if (!normalized) continue;
-      const nextValue = (counts.get(normalized) || 0) + (item?.count || 0);
-      counts.set(normalized, nextValue);
-    }
-
-    return Array.from(counts, ([name, value]) => ({ name, value }));
-  }, [facets.province, region2DConfig]);
-
-  useEffect(() => {
-    globeDockRef.current = globeDock;
-  }, [globeDock]);
+    '--right-pane-width': `${rightPaneWidth}px`
+  }), [rightPaneWidth]);
 
   const refreshStatus = useCallback(async () => {
     const data = await api.status();
@@ -628,6 +349,16 @@ function App() {
         rootPath: data.webdav?.rootPath || '/'
       }
     });
+    setAIForm({
+      apiUrl: data.ai?.apiUrl || '',
+      apiKey: '',
+      model: data.ai?.model || '',
+      provider: data.ai?.provider || 'openai-compatible',
+      systemPrompt: data.ai?.systemPrompt || ''
+    });
+    api.mcpTools()
+      .then((info) => setMcpInfo(info))
+      .catch(() => setMcpInfo(null));
     return data;
   }, []);
 
@@ -940,6 +671,14 @@ function App() {
     }
   };
 
+  const handleFileDrop = (event) => {
+    event.preventDefault();
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length) {
+      setUploadFiles(files);
+    }
+  };
+
   const handleOcrReindex = async () => {
     setBusy(true);
     try {
@@ -950,6 +689,181 @@ function App() {
       setError(err.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveAISettings = async () => {
+    setAIBusy(true);
+    try {
+      const payload = {
+        apiUrl: aiForm.apiUrl,
+        model: aiForm.model,
+        provider: aiForm.provider,
+        systemPrompt: aiForm.systemPrompt
+      };
+      if (String(aiForm.apiKey || '').trim()) {
+        payload.apiKey = aiForm.apiKey;
+      }
+      const data = await api.saveAISettings(payload);
+      setAIForm((prev) => ({
+        ...prev,
+        apiUrl: data.apiUrl || '',
+        apiKey: '',
+        model: data.model || '',
+        provider: data.provider || 'openai-compatible',
+        systemPrompt: data.systemPrompt || ''
+      }));
+      setMessage('AI 设置已保存');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAIBusy(false);
+    }
+  };
+
+  const fetchAIModels = useCallback(async (force = false) => {
+    const key = `${String(aiForm.apiUrl || '').trim()}|${String(aiForm.provider || '').trim()}|${Boolean(String(aiForm.apiKey || '').trim())}`;
+    if (!force && aiModelsKeyRef.current === key && aiModels.length) {
+      return;
+    }
+    setAIModelsBusy(true);
+    try {
+      const payload = {
+        apiUrl: aiForm.apiUrl,
+        provider: aiForm.provider
+      };
+      if (String(aiForm.apiKey || '').trim()) {
+        payload.apiKey = aiForm.apiKey;
+      }
+      const data = await api.aiModels(payload);
+      const models = Array.isArray(data.models) ? data.models : [];
+      setAIModels(models);
+      aiModelsKeyRef.current = key;
+      if (models.length && !models.some((item) => item.id === aiForm.model)) {
+        const preferred = models.find((item) => item.id === 'kimi-k2.6')
+          || models.find((item) => /kimi|gpt|qwen|glm|claude/i.test(item.id))
+          || models[0];
+        if (!aiForm.model && preferred?.id) {
+          setAIForm((prev) => ({ ...prev, model: preferred.id }));
+        }
+      }
+      setMessage(`已获取 ${models.length} 个模型`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAIModelsBusy(false);
+    }
+  }, [aiForm.apiKey, aiForm.apiUrl, aiForm.model, aiForm.provider, aiModels.length]);
+
+  const testAIConnection = async () => {
+    setAITestBusy(true);
+    setAITestResult(null);
+    try {
+      const payload = {
+        provider: aiForm.provider,
+        apiUrl: aiForm.apiUrl,
+        model: aiForm.model
+      };
+      if (String(aiForm.apiKey || '').trim()) {
+        payload.apiKey = aiForm.apiKey;
+      }
+      const data = await api.aiTest(payload);
+      setAITestResult({
+        ok: true,
+        latency: data.latency,
+        response: data.response,
+        model: data.model
+      });
+      setMessage(`连接测试成功，延迟 ${data.latency}ms`);
+    } catch (err) {
+      setAITestResult({ ok: false, error: err.message });
+      setError(`连接测试失败: ${err.message}`);
+    } finally {
+      setAITestBusy(false);
+    }
+  };
+
+  const handleBatchAIExtract = async () => {
+    const ids = maps.map((item) => item.id).slice(0, 10);
+    if (!ids.length) return;
+    setAIBusy(true);
+    try {
+      const data = await api.batchExtractAIMaps(ids, { includeImage: true });
+      const successCount = data.total || 0;
+      const errorCount = data.errors?.length || 0;
+      setMessage(`批量 AI 提取完成: 成功 ${successCount} 张${errorCount ? `，失败 ${errorCount} 张` : ''}`);
+      await loadMaps();
+      await loadFacets(filters.country || undefined);
+      if (selectedId && data.results?.some((r) => r.id === selectedId)) {
+        const detail = await api.map(selectedId);
+        setSelectedMap(detail);
+        setForm({
+          title: detail.title || '',
+          description: detail.description || '',
+          tags: (detail.tags || []).join(', '),
+          collection_unit: detail.collection_unit || '',
+          scope_level: detail.scope_level || '',
+          campaign: detail.campaign || '',
+          teaching_use: detail.teaching_use || '',
+          teaching_note: detail.teaching_note || '',
+          security_level: detail.security_level || '',
+          storage_band: detail.storage_band || '',
+          country_code: detail.country_code || '',
+          country_name: detail.country_name || '',
+          province: detail.province || '',
+          related_countries: joinMultiValue(detail.related_countries),
+          related_provinces: joinMultiValue(detail.related_provinces),
+          city: detail.city || '',
+          district: detail.district || '',
+          latitude: detail.latitude ?? '',
+          longitude: detail.longitude ?? '',
+          year_label: detail.year_label || ''
+        });
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAIBusy(false);
+    }
+  };
+
+  const handleAIExtract = async () => {
+    if (!selectedMap?.id) return;
+    setAIBusy(true);
+    try {
+      const data = await api.extractAIMap(selectedMap.id, { includeImage: true });
+      const updated = data.item || data;
+      setSelectedMap(updated);
+      setForm({
+        title: updated.title || '',
+        description: updated.description || '',
+        tags: (updated.tags || []).join(', '),
+        collection_unit: updated.collection_unit || '',
+        scope_level: updated.scope_level || '',
+        campaign: updated.campaign || '',
+        teaching_use: updated.teaching_use || '',
+        teaching_note: updated.teaching_note || '',
+        security_level: updated.security_level || '',
+        storage_band: updated.storage_band || '',
+        country_code: updated.country_code || '',
+        country_name: updated.country_name || '',
+        province: updated.province || '',
+        related_countries: joinMultiValue(updated.related_countries),
+        related_provinces: joinMultiValue(updated.related_provinces),
+        city: updated.city || '',
+        district: updated.district || '',
+        latitude: updated.latitude ?? '',
+        longitude: updated.longitude ?? '',
+        year_label: updated.year_label || ''
+      });
+      setSelectedId(updated.id);
+      await loadMaps();
+      await loadFacets(filters.country || undefined);
+      setMessage('AI 提取完成，已更新元数据和缩略图轮廓');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAIBusy(false);
     }
   };
 
@@ -968,95 +882,6 @@ function App() {
     setPaneSizes(DEFAULT_PANE_SIZES);
   };
 
-  const measureGlobe = useCallback(() => {
-    const node = globeRef.current;
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    if (rect.width && rect.height) {
-      setGlobeSize({ width: rect.width, height: rect.height });
-    }
-  }, []);
-
-  const getGlobeLimits = useCallback(() => {
-    const margin = GLOBE_DOCK_MARGIN;
-    const topInset = 64;
-    const width = globeSize.width || 320;
-    const height = globeSize.height || 420;
-    const maxX = Math.max(margin, window.innerWidth - width - margin);
-    const maxY = Math.max(topInset, window.innerHeight - height - margin);
-    return {
-      margin,
-      topInset,
-      width,
-      height,
-      maxX,
-      maxY
-    };
-  }, [globeSize.height, globeSize.width]);
-
-  const clampGlobePosition = useCallback((x, y) => {
-    const { margin, topInset, maxX, maxY } = getGlobeLimits();
-    return {
-      x: clamp(x, margin, maxX),
-      y: clamp(y, topInset, maxY)
-    };
-  }, [getGlobeLimits]);
-
-  const snapGlobeToEdge = useCallback((x, y) => {
-    const { margin, topInset, maxX, maxY } = getGlobeLimits();
-    const clamped = clampGlobePosition(x, y);
-    const distances = {
-      left: clamped.x - margin,
-      right: maxX - clamped.x,
-      top: clamped.y - topInset,
-      bottom: maxY - clamped.y
-    };
-
-    let side = 'left';
-    let min = distances.left;
-    for (const [key, value] of Object.entries(distances)) {
-      if (value < min) {
-        min = value;
-        side = key;
-      }
-    }
-
-    const snapped = {
-      x: clamped.x,
-      y: clamped.y,
-      side
-    };
-
-    if (side === 'left') {
-      snapped.x = margin;
-      snapped.y = clamp(clamped.y, topInset, maxY);
-    } else if (side === 'right') {
-      snapped.x = maxX;
-      snapped.y = clamp(clamped.y, topInset, maxY);
-    } else if (side === 'top') {
-      snapped.x = clamp(clamped.x, margin, maxX);
-      snapped.y = topInset;
-    } else if (side === 'bottom') {
-      snapped.x = clamp(clamped.x, margin, maxX);
-      snapped.y = maxY;
-    }
-
-    globeDockRef.current = snapped;
-    setGlobeDock(snapped);
-  }, [clampGlobePosition, getGlobeLimits]);
-
-  const handleGlobePointerDown = useCallback((event) => {
-    if (!globeOpen) return;
-    event.preventDefault();
-    globeDragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: globeDockRef.current.x,
-      originY: globeDockRef.current.y
-    };
-    setGlobeDragging(true);
-  }, [globeOpen]);
-
   useEffect(() => {
     refreshStatus()
       .then(async (data) => {
@@ -1068,6 +893,7 @@ function App() {
       .catch((err) => setError(err.message));
 
     loadChinaCities();
+    api.stats().then(setStats).catch(() => {});
   }, [refreshStatus, loadBrowser, loadStorageFolders, loadChinaCities]);
 
   useEffect(() => {
@@ -1132,10 +958,31 @@ function App() {
   }, [message]);
 
   useEffect(() => {
+    if (!settingsOpen || !String(aiForm.apiUrl || '').trim()) return;
+    fetchAIModels(false);
+  }, [settingsOpen, aiForm.apiUrl, aiForm.provider, fetchAIModels]);
+
+  useEffect(() => {
     if (!error) return;
     const timer = setTimeout(() => setError(''), 3500);
     return () => clearTimeout(timer);
   }, [error]);
+
+  useEffect(() => {
+    if (!viewerOpen) return undefined;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') { setViewerOpen(false); return; }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        const idx = maps.findIndex((m) => m.id === selectedId);
+        if (idx > 0) setSelectedId(maps[idx - 1].id);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        const idx = maps.findIndex((m) => m.id === selectedId);
+        if (idx >= 0 && idx < maps.length - 1) setSelectedId(maps[idx + 1].id);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [viewerOpen, maps, selectedId]);
 
   useEffect(() => {
     localStorage.setItem('roamly-ui-settings', JSON.stringify(uiSettings));
@@ -1157,7 +1004,7 @@ function App() {
 
   useEffect(() => {
     measureLayout();
-  }, [measureLayout, globeOffsetLeft, globeOffsetRight]);
+  }, [measureLayout]);
 
   useEffect(() => {
     const node = layoutRef.current;
@@ -1213,54 +1060,6 @@ function App() {
     };
   }, [resizingPane]);
 
-  useEffect(() => {
-    measureGlobe();
-    const initial = globeDockRef.current;
-    if (initial) {
-      snapGlobeToEdge(initial.x, initial.y);
-    }
-    const onResize = () => {
-      measureGlobe();
-      const current = globeDockRef.current;
-      if (current) {
-        snapGlobeToEdge(current.x, current.y);
-      }
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [measureGlobe, snapGlobeToEdge]);
-
-  useEffect(() => {
-    if (!globeDragging) return;
-
-    const onMove = (event) => {
-      const state = globeDragRef.current;
-      if (!state) return;
-      const next = clampGlobePosition(
-        state.originX + (event.clientX - state.startX),
-        state.originY + (event.clientY - state.startY)
-      );
-      globeDockRef.current = { ...(globeDockRef.current || {}), ...next };
-      setGlobeDock((prev) => ({ ...prev, ...next }));
-    };
-
-    const onUp = () => {
-      globeDragRef.current = null;
-      setGlobeDragging(false);
-      const current = globeDockRef.current;
-      if (current) {
-        snapGlobeToEdge(current.x, current.y);
-      }
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, [clampGlobePosition, globeDragging, snapGlobeToEdge]);
-
   return (
     <div className="page-root">
       <header className="topbar">
@@ -1276,113 +1075,14 @@ function App() {
           </span>
         </div>
         <div className="actions">
+          <button className={viewMode === 'library' ? 'active' : ''} onClick={() => setViewMode('library')}>图库</button>
+          <button className={viewMode === 'files' ? 'active' : ''} onClick={() => setViewMode('files')}>文件管理</button>
           <button onClick={() => setSettingsOpen(true)}>设置</button>
         </div>
       </header>
 
-      <div
-        ref={globeRef}
-        className={`globe-panel ${globeOpen ? 'is-open' : 'is-closed'}${globeDragging ? ' is-dragging' : ''}`}
-        data-side={globeDock.side}
-        style={{ left: globeDock.x, top: globeDock.y }}
-      >
-        <button
-          className="globe-toggle"
-          onClick={() => setGlobeOpen((prev) => !prev)}
-          title={globeOpen ? '隐藏地球筛选' : '打开地球筛选'}
-        >
-          {globeOpen ? '收起' : '地球筛选'}
-        </button>
-        <div className="globe-panel-inner">
-          <div className="globe-panel-header" onPointerDown={handleGlobePointerDown}>
-            <div>
-              <h4>全球交互筛选</h4>
-              <div className="globe-panel-sub">当前国家: {activeCountryLabel}</div>
-            </div>
-            <button
-              className="globe-hide"
-              onClick={() => setGlobeOpen(false)}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              隐藏
-            </button>
-          </div>
-          <div className="globe-filter-actions">
-            <button
-              onClick={() => patchFilters({
-                scope: '',
-                country: '全球',
-                city: '',
-                province: ''
-              })}
-            >
-              返回全球
-            </button>
-            <button
-              onClick={() => patchFilters({
-                scope: '',
-                country: '',
-                city: '',
-                province: ''
-              })}
-            >
-              查看全部
-            </button>
-          </div>
-          <GlobeCountryPicker
-            selectedCountry={filters.country}
-            getCountryLabel={toCountryLabel}
-            points={globePoints}
-            onPickCountry={(item) => {
-              patchFilters({
-                scope: '',
-                country: item.country || item.country_en || '',
-                province: '',
-                city: ''
-              });
-            }}
-          />
-          <div className="province-picker">
-            <div className="province-title">省份/州</div>
-            <select
-              value={filters.province}
-              onChange={(event) => patchFilters({ province: event.target.value, city: '' })}
-              disabled={!provinceEnabled}
-            >
-              <option value="">
-                {provinceEnabled ? '全部省份/州' : '先在地球选择国家'}
-              </option>
-              {effectiveProvinceOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label} ({item.count})
-                </option>
-              ))}
-            </select>
-            <button
-              className="province-clear"
-              onClick={() => patchFilters({ province: '', city: '' })}
-              disabled={!filters.province}
-            >
-              清空省份
-            </button>
-          </div>
-          {region2DConfig ? (
-            <div className="region-2d-panel">
-              <div className="region-2d-head">
-                <span>{region2DConfig.label}</span>
-                <span className="region-2d-sub">点击区域直接筛选</span>
-              </div>
-              <Region2DMap
-                config={region2DConfig}
-                data={region2DData}
-                onPickRegion={(name) => patchFilters({ province: name, city: '' })}
-              />
-            </div>
-          ) : null}
-          <div className="china-tip">点击地球国家可筛选包含该国家的地图；选择后可继续筛选省份/州（含中国省份）。</div>
-        </div>
-      </div>
-
+      {viewMode === 'library' ? (
+        <>
       <main
         ref={layoutRef}
         className={resizingPane ? 'layout is-resizing' : 'layout'}
@@ -1488,6 +1188,8 @@ function App() {
             </>
           ) : null}
 
+          {!uploadMetaOpen && stats ? <StatsPanel /> : null}
+
           <div className="count-line compact-count-line">
             <span>共 {total} 张，{totalPages} 页，当前第 {page} 页</span>
             <div className="count-controls">
@@ -1582,518 +1284,75 @@ function App() {
           title="拖拽调整右栏宽度，双击恢复默认"
         />
 
-        <aside className="right-pane pane">
-          <div className="detail-header detail-section">
-            <h3>{selectedSummary?.title || '未选择地图'}</h3>
-            <button onClick={toggleFavorite} disabled={!selectedSummary}>
-              {selectedSummary?.favorite ? '取消收藏' : '加入收藏'}
-            </button>
-          </div>
-
-          {selectedMap ? (
-            <>
-              <section className="detail-section preview-section">
-                <div className="preview-wrap" style={previewPanelStyle}>
-                  <TransformWrapper
-                    key={selectedMap.id}
-                    initialScale={1}
-                    minScale={0.3}
-                    maxScale={18}
-                    centerOnInit
-                    smooth={false}
-                    wheel={{
-                      step: 0.16,
-                      smoothStep: 0.005,
-                      touchPadDisabled: false,
-                      wheelDisabled: false
-                    }}
-                    pinch={{ step: 4 }}
-                    zoomAnimation={{ disabled: true }}
-                    alignmentAnimation={{ disabled: true }}
-                    velocityAnimation={{ disabled: true }}
-                    panning={{ velocityDisabled: true }}
-                    doubleClick={{
-                      mode: 'zoomIn',
-                      step: 1.4,
-                      animationTime: 80
-                    }}
-                  >
-                    {({ zoomIn, zoomOut, resetTransform }) => (
-                      <>
-                        <div className="preview-toolbar">
-                          <button onClick={() => zoomIn()}>放大</button>
-                          <button onClick={() => zoomOut()}>缩小</button>
-                          <button onClick={() => resetTransform()}>重置</button>
-                          <button onClick={() => setViewerOpen(true)}>全屏查看</button>
-                        </div>
-                        <TransformComponent
-                          wrapperClass="preview-transform-wrapper"
-                          contentClass="preview-transform-content"
-                        >
-                          <div className="preview-image-wrap">
-                            <img
-                              className="preview"
-                              src={detailImageSrc}
-                              alt={selectedMap.title || selectedMap.file_name}
-                              loading="eager"
-                              decoding="async"
-                            />
-                            {ocrHighlights.map((item, index) => (
-                              <div
-                                key={`${item.text}-${index}`}
-                                className="ocr-highlight"
-                                title={`${item.text} (${Math.round(item.confidence || 0)}%)`}
-                                style={{
-                                  left: `${(item.rect?.x || 0) * 100}%`,
-                                  top: `${(item.rect?.y || 0) * 100}%`,
-                                  width: `${(item.rect?.w || 0) * 100}%`,
-                                  height: `${(item.rect?.h || 0) * 100}%`
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </TransformComponent>
-                      </>
-                    )}
-                  </TransformWrapper>
-                  <div className="preview-tip">触控板/滚轮可缩放，拖拽可平移{ocrHighlights.length ? `，当前命中 ${ocrHighlights.length} 处 OCR 文本` : ''}</div>
-                </div>
-              </section>
-
-              <section className="detail-section meta-section">
-                <div className="file-meta">
-                  <span>ID: {selectedMap.id.slice(0, 12)}</span>
-                  <span>{selectedMap.width || '-'} x {selectedMap.height || '-'}</span>
-                  <span>{selectedMap.mime || '-'}</span>
-                  <span>{formatBytes(selectedMap.size_bytes)}</span>
-                  <span>{formatDate(selectedMap.mtime_ms)}</span>
-                  <span>OCR: {selectedMap.ocr_status || 'pending'}</span>
-                </div>
-                {selectedMap.ocr_text && ocrHighlights.length ? (
-                  <div className="preview-ocr-summary preview-ocr-summary-compact">
-                    <span className="preview-ocr-chip">OCR 命中 {ocrHighlights.length}</span>
-                  </div>
-                ) : null}
-              </section>
-
-              <section className="detail-section form-section">
-                <div className="form-block">
-                  <div className="form-block-title">内容信息</div>
-                  <div className="form-grid">
-                    <label>
-                      标题
-                      <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-                    </label>
-                    <label>
-                      年代
-                      <input value={form.year_label} onChange={(e) => setForm({ ...form, year_label: e.target.value })} />
-                    </label>
-                    <label>
-                      收藏单位
-                      <input value={form.collection_unit} onChange={(e) => setForm({ ...form, collection_unit: e.target.value })} />
-                    </label>
-                    <label>
-                      专题 / 战役
-                      <input value={form.campaign} onChange={(e) => setForm({ ...form, campaign: e.target.value })} />
-                    </label>
-                    <label>
-                      教学用途
-                      <input value={form.teaching_use} onChange={(e) => setForm({ ...form, teaching_use: e.target.value })} />
-                    </label>
-                    <label>
-                      密级
-                      <select value={form.security_level} onChange={(e) => setForm({ ...form, security_level: e.target.value })}>
-                        <option value="">未设置</option>
-                        <option value="内部教学">内部教学</option>
-                        <option value="内部资料">内部资料</option>
-                        <option value="保密审看">保密审看</option>
-                      </select>
-                    </label>
-                    <label>
-                      存储彩虹条
-                      <select value={form.storage_band} onChange={(e) => setForm({ ...form, storage_band: e.target.value })}>
-                        {STORAGE_BAND_OPTIONS.map((item) => (
-                          <option key={item.value || 'none'} value={item.value}>{item.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      标签
-                      <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="多个标签用逗号分隔" />
-                    </label>
-                    <label className="full">
-                      简介
-                      <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
-                    </label>
-                    <label className="full">
-                      授课备注
-                      <textarea value={form.teaching_note} onChange={(e) => setForm({ ...form, teaching_note: e.target.value })} rows={3} placeholder="用于课堂讲解、地图判读重点、保密提醒等" />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-block">
-                  <div className="form-block-title">定位与范围</div>
-                  <div className="form-grid compact">
-                    <label>
-                      范围
-                      <select value={form.scope_level} onChange={(e) => setForm({ ...form, scope_level: e.target.value })}>
-                        <option value="">未设置</option>
-                        <option value="national">国家级</option>
-                        <option value="international">国际</option>
-                      </select>
-                    </label>
-                    <label>
-                      国家
-                      <input value={form.country_name} onChange={(e) => setForm({ ...form, country_name: e.target.value })} />
-                    </label>
-                    <label>
-                      国家代码
-                      <input value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value })} />
-                    </label>
-                    <label>
-                      省/州（可多个，用逗号分隔）
-                      <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} />
-                    </label>
-                    <label>
-                      市（可多个，用逗号分隔；单城市可自动匹配）
-                      <input
-                        value={form.city}
-                        list="china-city-datalist"
-                        onChange={(e) => setForm({ ...form, city: e.target.value })}
-                        onBlur={() => resolveCityFromInput(form.city)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            resolveCityFromInput(form.city);
-                          }
-                        }}
-                      />
-                      <datalist id="china-city-datalist">
-                        {chinaCityOptions.map((item) => (
-                          <option key={`${item.province}-${item.city}`} value={item.city}>{item.province} / {item.city}</option>
-                        ))}
-                      </datalist>
-                    </label>
-                    <label>
-                      区县
-                      <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
-                    </label>
-                    <label className="full">
-                      关联国家（可多个，用逗号分隔）
-                      <input
-                        value={form.related_countries}
-                        placeholder="日本, 中国"
-                        onChange={(e) => setForm({ ...form, related_countries: e.target.value })}
-                      />
-                    </label>
-                    <label className="full">
-                      关联省份（可多个，用逗号分隔）
-                      <input
-                        value={form.related_provinces}
-                        placeholder="黑龙江, 吉林"
-                        onChange={(e) => setForm({ ...form, related_provinces: e.target.value })}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="form-block-actions">
-                    <div className="city-tools">
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (!value) return;
-                          const [province, city] = value.split('|');
-                          const item = chinaCityOptions.find((it) => it.province === province && it.city === city);
-                          if (item) {
-                            applyHint({
-                              ...item,
-                              scope_level: 'national'
-                            }, false);
-                          }
-                        }}
-                      >
-                        <option value="">从地级市列表快速选择</option>
-                        {chinaCityOptions.map((item) => (
-                          <option key={`${item.province}|${item.city}`} value={`${item.province}|${item.city}`}>
-                            {item.province} / {item.city}
-                          </option>
-                        ))}
-                      </select>
-                      <button onClick={() => resolveCityFromInput(form.city)} disabled={cityResolveBusy || !form.city.trim()}>
-                        {cityResolveBusy ? '匹配中...' : '自动匹配地级市'}
-                      </button>
-                    </div>
-
-                    {locationHints.length > 0 ? (
-                      <div className="hints">
-                        {locationHints.map((item) => (
-                          <button key={`${item.country_code}-${item.city}-${item.latitude}`} onClick={() => applyHint(item)}>
-                            {item.country_name} / {item.province} / {item.city}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-
-              <button className="save-btn" onClick={handleSave} disabled={busy}>保存地图信息</button>
-            </>
-          ) : (
-            <div className="empty-detail detail-section">从中间选择一张地图查看详情</div>
-          )}
-        </aside>
-      </main>
+        <DetailPane
+          selectedSummary={selectedSummary} selectedMap={selectedMap}
+          form={form} setForm={setForm}
+          detailImageSrc={detailImageSrc} previewPanelStyle={previewPanelStyle}
+          ocrHighlights={ocrHighlights}
+          coverageOutlinePoints={coverageOutlinePoints}
+          hasCoverageOutline={hasCoverageOutline}
+          normalizeOutlinePoints={normalizeOutlinePoints}
+          formatBytes={formatBytes} formatDate={formatDate}
+          handleAIExtract={handleAIExtract} aiBusy={aiBusy}
+          toggleFavorite={toggleFavorite}
+          setViewerOpen={setViewerOpen} handleSave={handleSave} busy={busy}
+          chinaCityOptions={chinaCityOptions} locationHints={locationHints}
+          applyHint={applyHint} resolveCityFromInput={resolveCityFromInput}
+          cityResolveBusy={cityResolveBusy}
+        />      </main>
+        </>
+      ) : (
+        <FileManager
+          status={status}
+          busy={busy}
+          uploadFiles={uploadFiles}
+          setUploadFiles={setUploadFiles}
+          uploadFolder={uploadFolder}
+          setUploadFolder={setUploadFolder}
+          uploadMeta={uploadMeta}
+          setUploadMeta={setUploadMeta}
+          folderOptions={folderOptions}
+          handleScan={handleScan}
+          handleUpload={handleUpload}
+          handleFileDrop={handleFileDrop}
+          loadStorageFolders={loadStorageFolders}
+          mcpInfo={mcpInfo}
+          maps={maps}
+          setSelectedId={setSelectedId}
+          setViewMode={setViewMode}
+          ocrStatus={ocrStatus}
+          stats={stats}
+        />
+      )}
 
       {settingsOpen ? (
-        <div className="settings-mask" onClick={() => setSettingsOpen(false)}>
-          <aside className="settings-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="settings-head">
-              <h3>系统设置</h3>
-              <button onClick={() => setSettingsOpen(false)}>关闭</button>
-            </div>
-
-            <div className="settings-block">
-              <h4>显示设置</h4>
-              <label className="settings-check">
-                <input
-                  type="checkbox"
-                  checked={Boolean(uiSettings.thumbnailLabelVisible)}
-                  onChange={(e) => setUiSettings((prev) => ({ ...prev, thumbnailLabelVisible: e.target.checked }))}
-                />
-                显示缩略图文字
-              </label>
-              <label className="settings-slider">
-                缩略图文字大小: {clamp(Number(uiSettings.thumbnailLabelSize) || 14, 10, 28)}
-                <input
-                  type="range"
-                  min="10"
-                  max="28"
-                  value={clamp(Number(uiSettings.thumbnailLabelSize) || 14, 10, 28)}
-                  onChange={(e) => setUiSettings((prev) => ({ ...prev, thumbnailLabelSize: Number(e.target.value) }))}
-                />
-              </label>
-              <label className="settings-slider">
-                缩略图宽度: {clamp(Number(uiSettings.thumbnailWidth) || 180, 10, 320)} px
-                <input
-                  type="range"
-                  min="10"
-                  max="320"
-                  value={clamp(Number(uiSettings.thumbnailWidth) || 180, 10, 320)}
-                  onChange={(e) => setUiSettings((prev) => ({ ...prev, thumbnailWidth: Number(e.target.value) }))}
-                />
-              </label>
-              <label className="settings-slider">
-                缩略图高度: {clamp(Number(uiSettings.thumbnailHeight) || 160, 10, 320)} px
-                <input
-                  type="range"
-                  min="10"
-                  max="320"
-                  value={clamp(Number(uiSettings.thumbnailHeight) || 160, 10, 320)}
-                  onChange={(e) => setUiSettings((prev) => ({ ...prev, thumbnailHeight: Number(e.target.value) }))}
-                />
-              </label>
-              <label className="settings-slider">
-                右侧主图高度: {clamp(Number(uiSettings.detailPreviewHeight) || 520, 320, 860)} px
-                <input
-                  type="range"
-                  min="320"
-                  max="860"
-                  value={clamp(Number(uiSettings.detailPreviewHeight) || 520, 320, 860)}
-                  onChange={(e) => setUiSettings((prev) => ({ ...prev, detailPreviewHeight: Number(e.target.value) }))}
-                />
-              </label>
-              <div className="settings-tip">中间两条分隔线可拖拽，左右三栏支持宽度调整。</div>
-            </div>
-
-            <div className="settings-block">
-              <h4>存储设置</h4>
-              <label>
-                存储模式
-                <select
-                  value={storageForm.storageDriver}
-                  onChange={(e) => setStorageForm((prev) => ({ ...prev, storageDriver: normalizeDriver(e.target.value) }))}
-                >
-                  <option value="local">本地目录</option>
-                  <option value="server">服务端托管</option>
-                  <option value="webdav">WebDAV</option>
-                </select>
-              </label>
-
-              {storageForm.storageDriver === 'local' ? (
-                <>
-                  <div className="library-row">
-                    <input
-                      value={storageForm.mapLibraryDir}
-                      onChange={(e) => setStorageForm((prev) => ({ ...prev, mapLibraryDir: e.target.value }))}
-                      placeholder="输入本地地图目录"
-                    />
-                    <button onClick={applyStorageSettings} disabled={busy}>设置目录</button>
-                    <button onClick={() => loadBrowser(browserState.currentPath || storageForm.mapLibraryDir, 'local')} disabled={busy}>刷新浏览</button>
-                  </div>
-
-                  <div className="browser-row">
-                    <button onClick={() => loadBrowser(browserState.parentPath, 'local')} disabled={!browserState.parentPath}>上级</button>
-                    <span className="browser-path" title={browserState.currentPath}>{browserState.currentPath || '-'}</span>
-                  </div>
-                  <div className="browser-list">
-                    {browserState.children.map((item) => (
-                      <button
-                        key={item.path}
-                        onClick={() => {
-                          setStorageForm((prev) => ({ ...prev, mapLibraryDir: item.path }));
-                          loadBrowser(item.path, 'local');
-                        }}
-                        title={item.path}
-                      >
-                        {item.name}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : storageForm.storageDriver === 'server' ? (
-                <>
-                  <div className="library-row">
-                    <input
-                      value={storageForm.serverMapDir}
-                      onChange={(e) => setStorageForm((prev) => ({ ...prev, serverMapDir: e.target.value }))}
-                      placeholder="输入服务端托管目录"
-                    />
-                    <button onClick={applyStorageSettings} disabled={busy}>设置目录</button>
-                    <button onClick={() => loadBrowser(browserState.currentPath || storageForm.serverMapDir, 'server')} disabled={busy}>刷新浏览</button>
-                  </div>
-                  <div className="settings-tip">适合 Docker / 部署场景。用户上传后文件会直接落到服务端目录，并可自动归类。</div>
-                </>
-              ) : (
-                <div className="webdav-grid">
-                  <label>
-                    WebDAV URL
-                    <input
-                      value={storageForm.webdav.url}
-                      onChange={(e) => setStorageForm((prev) => ({
-                        ...prev,
-                        webdav: { ...prev.webdav, url: e.target.value }
-                      }))}
-                      placeholder="https://example.com/remote.php/dav/files/user"
-                    />
-                  </label>
-                  <label>
-                    用户名
-                    <input
-                      value={storageForm.webdav.username}
-                      onChange={(e) => setStorageForm((prev) => ({
-                        ...prev,
-                        webdav: { ...prev.webdav, username: e.target.value }
-                      }))}
-                    />
-                  </label>
-                  <label>
-                    密码（留空表示保持不变）
-                    <input
-                      type="password"
-                      value={storageForm.webdav.password}
-                      onChange={(e) => setStorageForm((prev) => ({
-                        ...prev,
-                        webdav: { ...prev.webdav, password: e.target.value }
-                      }))}
-                    />
-                  </label>
-                  <label>
-                    根目录
-                    <input
-                      value={storageForm.webdav.rootPath}
-                      onChange={(e) => setStorageForm((prev) => ({
-                        ...prev,
-                        webdav: { ...prev.webdav, rootPath: e.target.value }
-                      }))}
-                      placeholder="/maps"
-                    />
-                  </label>
-                </div>
-              )}
-
-              <div className="settings-actions">
-                <button onClick={applyStorageSettings} disabled={busy}>保存存储设置并扫描</button>
-                <button onClick={() => loadStorageFolders(storageForm.storageDriver)} disabled={busy}>刷新目录列表</button>
-              </div>
-              <div className="settings-line">项目键: {status?.project?.projectKey || '-'}</div>
-              <div className="settings-line">项目根目录: {status?.project?.root || '-'}</div>
-              <div className="settings-line">缓存文件: {status?.project?.cacheFile || '-'}</div>
-            </div>
-
-            <div className="settings-block">
-              <h4>OCR 文字检索</h4>
-              <div className="settings-line">状态: {ocrStatus?.available ? '可用' : '不可用'}</div>
-              <div className="settings-line">队列: {ocrStatus?.queueSize || 0}</div>
-              <div className="settings-line">识别语言: {ocrStatus?.lang || '-'}</div>
-              {!ocrStatus?.available ? (
-                <div className="settings-tip">请先安装 tesseract（mac: `brew install tesseract tesseract-lang`）。</div>
-              ) : null}
-              <button onClick={handleOcrReindex} disabled={busy || !ocrStatus?.available}>重建 OCR 索引</button>
-            </div>
-          </aside>
-        </div>
+        <SettingsDialog
+          onClose={() => setSettingsOpen(false)}
+          uiSettings={uiSettings} setUiSettings={setUiSettings}
+          storageForm={storageForm} setStorageForm={setStorageForm}
+          browserState={browserState} loadBrowser={loadBrowser}
+          applyStorageSettings={applyStorageSettings}
+          loadStorageFolders={loadStorageFolders} busy={busy} status={status}
+          ocrStatus={ocrStatus} handleOcrReindex={handleOcrReindex}
+          aiForm={aiForm} setAIForm={setAIForm} aiModels={aiModels}
+          aiModelsBusy={aiModelsBusy} aiBusy={aiBusy}
+          aiTestBusy={aiTestBusy} aiTestResult={aiTestResult}
+          saveAISettings={saveAISettings} fetchAIModels={fetchAIModels}
+          testAIConnection={testAIConnection}
+          handleAIExtract={handleAIExtract} handleBatchAIExtract={handleBatchAIExtract}
+          selectedMap={selectedMap} maps={maps} aiModelsKeyRef={aiModelsKeyRef}
+          stats={stats}
+        />
       ) : null}
 
       {viewerOpen && selectedMap ? (
-        <div className="viewer-mask" onClick={() => setViewerOpen(false)}>
-          <div className="viewer-panel" onClick={(e) => e.stopPropagation()}>
-            <TransformWrapper
-              key={`viewer-${selectedMap.id}`}
-              initialScale={1}
-              minScale={0.25}
-              maxScale={16}
-              centerOnInit
-              smooth={false}
-              wheel={{
-                step: 0.22,
-                smoothStep: 0.005,
-                wheelDisabled: false,
-                touchPadDisabled: false
-              }}
-              zoomAnimation={{ disabled: true }}
-              alignmentAnimation={{ disabled: true }}
-              velocityAnimation={{ disabled: true }}
-              pinch={{
-                step: 4
-              }}
-              doubleClick={{
-                mode: 'zoomIn',
-                step: 1.4,
-                animationTime: 90
-              }}
-              panning={{
-                velocityDisabled: true,
-                wheelPanning: false
-              }}
-            >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <>
-                  <div className="viewer-toolbar">
-                    <button onClick={() => zoomIn()}>放大</button>
-                    <button onClick={() => zoomOut()}>缩小</button>
-                    <button onClick={() => resetTransform()}>重置</button>
-                    <button onClick={() => setViewerOpen(false)}>关闭</button>
-                  </div>
-                  <TransformComponent
-                    wrapperStyle={{ width: '100%', height: 'calc(100vh - 120px)' }}
-                    contentStyle={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                  >
-                    <img
-                      className="viewer-image"
-                      src={viewerImageSrc}
-                      alt={selectedMap.title || selectedMap.file_name}
-                      loading="eager"
-                      decoding="async"
-                    />
-                  </TransformComponent>
-                </>
-              )}
-            </TransformWrapper>
-          </div>
-        </div>
+        <ImageViewer
+          selectedMap={selectedMap}
+          imageSrc={viewerImageSrc}
+          maps={maps}
+          setSelectedId={setSelectedId}
+          onClose={() => setViewerOpen(false)}
+        />
       ) : null}
 
       {message ? <div className="toast ok">{message}</div> : null}

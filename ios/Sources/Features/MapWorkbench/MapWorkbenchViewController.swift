@@ -1,7 +1,48 @@
 import MapKit
 import UIKit
 
-final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
+private enum MapLabelMode {
+  case compact
+  case named
+}
+
+private enum MapDisplayScope {
+  case point
+  case coverageArea
+  case country
+  case province
+
+  var usesAdministrativeFill: Bool {
+    self == .country || self == .province
+  }
+}
+
+private struct MapRegionSelection: Equatable {
+  let level: AdministrativeBoundaryLevel
+  let countryName: String
+  let provinceName: String?
+
+  var title: String {
+    switch level {
+    case .country:
+      return countryName
+    case .province:
+      return [countryName, provinceName].compactMap { value in
+        let text = String(value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+      }.joined(separator: " · ")
+    }
+  }
+}
+
+private struct MapOverlayInfo {
+  let record: MapRecord
+  let selection: MapRegionSelection?
+  let scope: MapDisplayScope
+  let title: String
+}
+
+final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate, UIGestureRecognizerDelegate {
   private enum WorkbenchFilter: Int, CaseIterable {
     case pending
     case located
@@ -35,10 +76,13 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
   }
 
   private let container: AppContainer
+  private let administrativeBoundaryStore = AdministrativeBoundaryStore()
   private var records: [MapRecord] = []
   private var queueRecords: [MapRecord] = []
   private var selectedFilter: WorkbenchFilter = .pending
   private var selectedFacet: WorkbenchFacet = .coverage
+  private var selectedMapRegion: MapRegionSelection?
+  private var overlayInfoByIdentifier: [ObjectIdentifier: MapOverlayInfo] = [:]
   private var isWorkbenchCollapsed = false
   private var chipButtons: [FilterChipButton] = []
   private var facetButtons: [FilterChipButton] = []
@@ -149,6 +193,10 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     mapView.showsCompass = false
     mapView.showsScale = true
     mapView.isRotateEnabled = false
+    let tapGesture = UITapGestureRecognizer(target: self, action: #selector(mapTapped(_:)))
+    tapGesture.cancelsTouchesInView = false
+    tapGesture.delegate = self
+    mapView.addGestureRecognizer(tapGesture)
     updateMapLayoutMargins()
     mapView.setRegion(
       MKCoordinateRegion(
@@ -446,7 +494,16 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     updateFacets()
     updateQueue()
     updateDataGrid()
-    updateMapAnnotations()
+    updateSearchSummary()
+    updateMapAnnotations(fit: true)
+  }
+
+  private func updateSearchSummary() {
+    if let selectedMapRegion {
+      searchSubtitleLabel.text = "\(selectedMapRegion.title) · \(filteredRecords().count) 张地图 · 点空白取消"
+    } else {
+      searchSubtitleLabel.text = "全球 213 区域 · 16 来源 · 离线 42.8GB"
+    }
   }
 
   private func updateMetrics() {
@@ -549,37 +606,193 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     }
   }
 
-  private func updateMapAnnotations() {
+  private func updateMapAnnotations(fit: Bool) {
     mapView.removeAnnotations(mapView.annotations)
     mapView.removeOverlays(mapView.overlays)
+    overlayInfoByIdentifier.removeAll()
     let visibleMapRecords = filteredRecords()
-    let annotations = visibleMapRecords.compactMap { record -> MapRecordAnnotation? in
-      guard let center = coverageCenter(for: record) else { return nil }
-      if let polygon = coveragePolygon(for: record) {
+    let mapItems = visibleMapRecords.compactMap { record -> (record: MapRecord, center: CLLocationCoordinate2D, scope: MapDisplayScope)? in
+      let scope = displayScope(for: record)
+      guard let center = mapCenter(for: record, scope: scope) else { return nil }
+      return (record, center, scope)
+    }
+    let labelMode = mapLabelMode(for: mapItems.count)
+    let annotations = mapItems.map { item -> MapRecordAnnotation in
+      let record = item.record
+      let selection = regionSelection(for: record, scope: item.scope)
+      let polygons = mapPolygons(for: record, scope: item.scope)
+      polygons.forEach { polygon in
+        let info = MapOverlayInfo(record: record, selection: selection, scope: item.scope, title: placeTitle(for: record, scope: item.scope))
+        overlayInfoByIdentifier[ObjectIdentifier(polygon)] = info
         mapView.addOverlay(polygon)
-        return MapRecordAnnotation(record: record, coordinate: center, representsCoverageArea: true)
       }
-      return MapRecordAnnotation(record: record, coordinate: center, representsCoverageArea: false)
+      return MapRecordAnnotation(
+        record: record,
+        coordinate: item.center,
+        representsCoverageArea: !polygons.isEmpty,
+        scope: item.scope,
+        labelMode: labelMode
+      )
     }
     mapView.addAnnotations(annotations)
-    if annotations.isEmpty {
+    if annotations.isEmpty && mapView.overlays.isEmpty {
       resetMapRegion(animated: false)
-    } else {
+    } else if fit {
       fitAnnotations(animated: false)
     }
   }
 
+  private func mapLabelMode(for coordinateRecordCount: Int) -> MapLabelMode {
+    let span = mapView.region.span
+    if span.latitudeDelta > 12 || span.longitudeDelta > 16 {
+      return .compact
+    }
+    guard coordinateRecordCount > 14 else { return .named }
+    return span.latitudeDelta > 3.5 || span.longitudeDelta > 5 ? .compact : .named
+  }
+
+  private func displayScope(for record: MapRecord) -> MapDisplayScope {
+    let scope = normalizedToken(record.scopeLevel)
+    if scope == "city" || scope == "district" || !normalizedToken(record.city).isEmpty || !normalizedToken(record.district).isEmpty {
+      return .point
+    }
+    if scope == "country" || (!normalizedToken(record.countryName).isEmpty && normalizedToken(record.province).isEmpty) {
+      return .country
+    }
+    if scope == "province" || !normalizedToken(record.province).isEmpty {
+      return .province
+    }
+    return coverageBounds(for: record) == nil ? .point : .coverageArea
+  }
+
+  private func mapCenter(for record: MapRecord, scope: MapDisplayScope) -> CLLocationCoordinate2D? {
+    if scope.usesAdministrativeFill,
+       let boundary = administrativeBoundary(for: record, scope: scope),
+       let center = boundary.center {
+      return center
+    }
+    if scope == .point, let latitude = record.latitude, let longitude = record.longitude {
+      return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+    return coverageCenter(for: record)
+  }
+
+  private func mapPolygons(for record: MapRecord, scope: MapDisplayScope) -> [MKPolygon] {
+    if scope.usesAdministrativeFill,
+       let boundary = administrativeBoundary(for: record, scope: scope) {
+      return boundary.polygons.map { coordinates in
+        MKPolygon(coordinates: coordinates, count: coordinates.count)
+      }
+    }
+    guard scope != .point, let polygon = coveragePolygon(for: record) else { return [] }
+    return [polygon]
+  }
+
+  private func administrativeBoundary(for record: MapRecord, scope: MapDisplayScope) -> AdministrativeBoundary? {
+    switch scope {
+    case .country:
+      return administrativeBoundaryStore.boundary(countryName: record.countryName, provinceName: nil)
+    case .province:
+      return administrativeBoundaryStore.boundary(countryName: record.countryName, provinceName: record.province)
+    case .point, .coverageArea:
+      return nil
+    }
+  }
+
+  private func regionSelection(for record: MapRecord, scope: MapDisplayScope) -> MapRegionSelection? {
+    switch scope {
+    case .country:
+      let country = displayCountryName(for: record)
+      guard !country.isEmpty else { return nil }
+      return MapRegionSelection(level: .country, countryName: country, provinceName: nil)
+    case .province:
+      let country = displayCountryName(for: record)
+      let province = displayProvinceName(for: record)
+      guard !country.isEmpty, !province.isEmpty else { return nil }
+      return MapRegionSelection(level: .province, countryName: country, provinceName: province)
+    case .point, .coverageArea:
+      return nil
+    }
+  }
+
+  private func placeTitle(for record: MapRecord, scope: MapDisplayScope) -> String {
+    switch scope {
+    case .country:
+      let country = displayCountryName(for: record)
+      return country.isEmpty ? record.title : country
+    case .province:
+      let province = displayProvinceName(for: record)
+      return province.isEmpty ? record.title : province
+    case .point, .coverageArea:
+      return MapRecordAnnotation.placeTitle(for: record)
+    }
+  }
+
   private func filteredRecords() -> [MapRecord] {
+    let source: [MapRecord]
     switch selectedFilter {
     case .pending:
-      return records.filter(priorityRecord)
+      source = records.filter(priorityRecord)
     case .located:
-      return records.filter { !isLocationMissing($0) }
+      source = records.filter { !isLocationMissing($0) }
     case .pendingOCR:
-      return records.filter(isOCRMissing)
+      source = records.filter(isOCRMissing)
     case .favorite:
-      return records.filter(\.favorite)
+      source = records.filter(\.favorite)
     }
+    guard let selectedMapRegion else { return source }
+    return source.filter { record in
+      recordMatches(record, selection: selectedMapRegion)
+    }
+  }
+
+  private func recordMatches(_ record: MapRecord, selection: MapRegionSelection) -> Bool {
+    guard normalizedCountryName(displayCountryName(for: record)) == normalizedCountryName(selection.countryName) else {
+      return false
+    }
+    switch selection.level {
+    case .country:
+      return true
+    case .province:
+      let selectedProvince = normalizedRegionName(selection.provinceName)
+      guard !selectedProvince.isEmpty else { return true }
+      let recordProvinces = [record.province] + record.relatedProvinces.map(Optional.some)
+      return recordProvinces.contains {
+        normalizedRegionName($0) == selectedProvince
+      }
+    }
+  }
+
+  private func displayCountryName(for record: MapRecord) -> String {
+    container.regionCatalog.displayCountryName(for: record.countryName).trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func displayProvinceName(for record: MapRecord) -> String {
+    String(record.province ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func normalizedToken(_ value: String?) -> String {
+    String(value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func normalizedCountryName(_ value: String?) -> String {
+    let raw = normalizedRegionName(value).lowercased()
+    switch raw {
+    case "china", "cn", "中华人民共和国":
+      return "中国"
+    default:
+      return raw
+    }
+  }
+
+  private func normalizedRegionName(_ value: String?) -> String {
+    var result = String(value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let suffixes = ["壮族自治区", "回族自治区", "维吾尔自治区", "特别行政区", "自治区", "省", "市"]
+    for suffix in suffixes where result.hasSuffix(suffix) {
+      result.removeLast(suffix.count)
+      break
+    }
+    return result
   }
 
   private func facetedRecords(from source: [MapRecord], facet: WorkbenchFacet? = nil) -> [MapRecord] {
@@ -721,6 +934,53 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     reloadData()
   }
 
+  @objc private func mapTapped(_ gesture: UITapGestureRecognizer) {
+    guard gesture.state == .ended else { return }
+    let screenPoint = gesture.location(in: mapView)
+    let coordinate = mapView.convert(screenPoint, toCoordinateFrom: mapView)
+    let mapPoint = MKMapPoint(coordinate)
+
+    let hits = mapView.overlays.compactMap { overlay -> (polygon: MKPolygon, selection: MapRegionSelection)? in
+      guard
+        let polygon = overlay as? MKPolygon,
+        let selection = overlayInfoByIdentifier[ObjectIdentifier(polygon)]?.selection,
+        polygonContains(polygon, mapPoint: mapPoint)
+      else { return nil }
+      return (polygon, selection)
+    }
+    if let hit = hits.min(by: { lhs, rhs in
+      lhs.polygon.boundingMapRect.size.width * lhs.polygon.boundingMapRect.size.height <
+        rhs.polygon.boundingMapRect.size.width * rhs.polygon.boundingMapRect.size.height
+    }) {
+      let selection = hit.selection
+      selectedMapRegion = selection
+      container.haptics.selectionChanged()
+      reloadData()
+      return
+    }
+
+    if selectedMapRegion != nil {
+      selectedMapRegion = nil
+      container.haptics.selectionChanged()
+      reloadData()
+    }
+  }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    var view: UIView? = touch.view
+    while let current = view {
+      if current is MKAnnotationView {
+        return false
+      }
+      view = current.superview
+    }
+    return true
+  }
+
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+    true
+  }
+
   @objc private func openLibraryFromWorkbench() {
     container.haptics.softTap()
     tabBarController?.selectedIndex = 1
@@ -796,23 +1056,53 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
 
   func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
     guard let annotation = annotation as? MapRecordAnnotation else { return nil }
+    if annotation.labelMode == .compact {
+      let identifier = "MapCompactAnnotation"
+      let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+      view.annotation = annotation
+      view.canShowCallout = true
+      view.markerTintColor = annotation.representsCoverageArea ? UIColor(red: 0.02, green: 0.48, blue: 0.78, alpha: 1) : UIColor(red: 0.06, green: 0.16, blue: 0.20, alpha: 1)
+      view.glyphImage = UIImage(systemName: annotationGlyph(for: annotation.scope))
+      view.titleVisibility = .hidden
+      view.subtitleVisibility = .hidden
+      view.displayPriority = .defaultLow
+      view.collisionMode = .circle
+      view.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
+      return view
+    }
     if annotation.representsCoverageArea {
       let identifier = "MapCoverageLabelAnnotation"
       let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? CoverageLabelAnnotationView ?? CoverageLabelAnnotationView(annotation: annotation, reuseIdentifier: identifier)
       view.annotation = annotation
-      view.configure(title: annotation.record.title)
+      view.configure(title: annotation.placeTitle)
       view.canShowCallout = true
       view.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
       return view
     }
-    let identifier = "MapRecordAnnotation"
-    let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+    let identifier = "MapPlaceLabelAnnotation"
+    let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? CoverageLabelAnnotationView ?? CoverageLabelAnnotationView(annotation: annotation, reuseIdentifier: identifier)
     view.annotation = annotation
+    view.configure(title: annotation.placeTitle)
     view.canShowCallout = true
-    view.markerTintColor = UIColor(red: 0.06, green: 0.16, blue: 0.20, alpha: 1)
-    view.glyphImage = UIImage(systemName: "map")
     view.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
     return view
+  }
+
+  private func annotationGlyph(for scope: MapDisplayScope) -> String {
+    switch scope {
+    case .country:
+      return "globe.asia.australia"
+    case .province:
+      return "map"
+    case .coverageArea:
+      return "rectangle.dashed"
+    case .point:
+      return "mappin"
+    }
+  }
+
+  func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+    updateMapAnnotations(fit: false)
   }
 
   func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
@@ -825,10 +1115,19 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
       return MKOverlayRenderer(overlay: overlay)
     }
     let renderer = MKPolygonRenderer(polygon: polygon)
-    renderer.fillColor = UIColor(red: 0.02, green: 0.48, blue: 0.78, alpha: 0.16)
-    renderer.strokeColor = UIColor(red: 0.03, green: 0.22, blue: 0.28, alpha: 0.85)
-    renderer.lineWidth = 2
-    renderer.lineDashPattern = [8, 5]
+    let info = overlayInfoByIdentifier[ObjectIdentifier(polygon)]
+    let selected = info?.selection != nil && info?.selection == selectedMapRegion
+    if info?.scope.usesAdministrativeFill == true {
+      renderer.fillColor = UIColor(red: 0.14, green: 0.60, blue: 0.42, alpha: selected ? 0.34 : 0.22)
+      renderer.strokeColor = UIColor(red: 0.03, green: 0.31, blue: 0.22, alpha: selected ? 0.95 : 0.72)
+      renderer.lineWidth = selected ? 2.4 : 1.4
+      renderer.lineDashPattern = nil
+    } else {
+      renderer.fillColor = UIColor(red: 0.02, green: 0.48, blue: 0.78, alpha: selected ? 0.26 : 0.16)
+      renderer.strokeColor = UIColor(red: 0.03, green: 0.22, blue: 0.28, alpha: 0.85)
+      renderer.lineWidth = 2
+      renderer.lineDashPattern = [8, 5]
+    }
     return renderer
   }
 
@@ -867,19 +1166,65 @@ final class MapWorkbenchViewController: UIViewController, MKMapViewDelegate {
     ]
     return MKPolygon(coordinates: coordinates, count: coordinates.count)
   }
+
+  private func polygonContains(_ polygon: MKPolygon, mapPoint target: MKMapPoint) -> Bool {
+    let points = polygon.points()
+    let count = polygon.pointCount
+    guard count >= 3 else { return false }
+
+    var inside = false
+    var previous = count - 1
+    for current in 0..<count {
+      let currentPoint = points[current]
+      let previousPoint = points[previous]
+      let intersects = ((currentPoint.y > target.y) != (previousPoint.y > target.y)) &&
+        (target.x < (previousPoint.x - currentPoint.x) * (target.y - currentPoint.y) / (previousPoint.y - currentPoint.y) + currentPoint.x)
+      if intersects {
+        inside.toggle()
+      }
+      previous = current
+    }
+    return inside
+  }
 }
 
 private final class MapRecordAnnotation: NSObject, MKAnnotation {
   let record: MapRecord
   let coordinate: CLLocationCoordinate2D
   let representsCoverageArea: Bool
-  var title: String? { record.title }
-  var subtitle: String? { record.subtitleText }
+  let scope: MapDisplayScope
+  let labelMode: MapLabelMode
+  var title: String? { placeTitle }
+  var subtitle: String? { record.title }
+  var placeTitle: String {
+    switch scope {
+    case .country:
+      return String(record.countryName ?? record.title).trimmingCharacters(in: .whitespacesAndNewlines)
+    case .province:
+      let province = String(record.province ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      return province.isEmpty ? record.title : province
+    case .point, .coverageArea:
+      return Self.placeTitle(for: record)
+    }
+  }
 
-  init(record: MapRecord, coordinate: CLLocationCoordinate2D, representsCoverageArea: Bool) {
+  static func placeTitle(for record: MapRecord) -> String {
+    let placeParts = [record.countryName, record.province, record.city, record.district].compactMap { value -> String? in
+      guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+      return value
+    }
+    if !placeParts.isEmpty {
+      return placeParts.suffix(2).joined(separator: " · ")
+    }
+    return record.title
+  }
+
+  init(record: MapRecord, coordinate: CLLocationCoordinate2D, representsCoverageArea: Bool, scope: MapDisplayScope, labelMode: MapLabelMode) {
     self.record = record
     self.coordinate = coordinate
     self.representsCoverageArea = representsCoverageArea
+    self.scope = scope
+    self.labelMode = labelMode
   }
 }
 

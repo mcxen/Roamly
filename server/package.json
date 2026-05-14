@@ -9,6 +9,7 @@
     "vision": "node src/scripts/apple-vision-analyze.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "chokidar": "^3.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -20,7 +21,8 @@
     "pino": "^9.1.0",
     "pino-pretty": "^11.1.0",
     "sharp": "^0.34.5",
-    "webdav": "^5.7.1"
+    "webdav": "^5.7.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

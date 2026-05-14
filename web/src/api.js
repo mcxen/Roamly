@@ -30,8 +30,59 @@ export const api = {
       body: JSON.stringify({ force, limit })
     }));
   },
+  async aiSettings() {
+    return handle(await fetch('/api/ai/settings'));
+  },
+  async saveAISettings(payload) {
+    return handle(await fetch('/api/ai/settings', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async aiProviders() {
+    return handle(await fetch('/api/ai/providers'));
+  },
+  async aiModels(payload) {
+    return handle(await fetch('/api/ai/models', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async aiTest(payload) {
+    return handle(await fetch('/api/ai/test', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async aiChat(payload) {
+    return handle(await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(payload || {})
+    }));
+  },
+  async extractAIMap(id, options = {}) {
+    return handle(await fetch(`/api/ai/maps/${id}/extract`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(options || {})
+    }));
+  },
+  async batchExtractAIMaps(ids, options = {}) {
+    return handle(await fetch('/api/ai/maps/batch-extract', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ ids, ...options })
+    }));
+  },
   async storageSettings() {
     return handle(await fetch('/api/storage/settings'));
+  },
+  async mcpTools() {
+    return handle(await fetch('/api/mcp/tools'));
   },
   async saveStorageSettings(payload) {
     return handle(await fetch('/api/storage/settings', {
@@ -65,6 +116,9 @@ export const api = {
     }
     const suffix = query.toString();
     return handle(await fetch(`/api/maps/facets${suffix ? `?${suffix}` : ''}`));
+  },
+  async stats() {
+    return handle(await fetch('/api/maps/stats'));
   },
   async map(id) {
     return handle(await fetch(`/api/maps/${id}`));

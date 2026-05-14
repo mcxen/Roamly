@@ -13,9 +13,11 @@
 		1D1C367FAB7D37719E4C59B2 /* BackupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F299BC742467666736316081 /* BackupViewController.swift */; };
 		2BF0F3BA97D1DC7B52F38AF2 /* OCRIndexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EFB6338513DA1ECA0F15D8 /* OCRIndexService.swift */; };
 		4FA7127514EF123E107CB98A /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 503567727D97B7F2A168563E /* AppContainer.swift */; };
+		59F6C3F0B66B4B8890BCF11D /* AdministrativeBoundaryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B59BE205274E30A454EB27 /* AdministrativeBoundaryStore.swift */; };
 		6A8A0741748B395D1034DA79 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D48DBE6B0B0A55169CA6AB /* SceneDelegate.swift */; };
 		6B5D9D57DA8D27851FE1B289 /* RegionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1831224C7D6E16F1EA24D5C /* RegionCatalog.swift */; };
 		6F33E1CDFA59C33FE18B12C5 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40533C814E4FC644D51291B3 /* AppDelegate.swift */; };
+		70B18D5512F442D89D636783 /* admin-boundaries-cn.json in Resources */ = {isa = PBXBuildFile; fileRef = 1974D4EE28DF48FCA96C34CF /* admin-boundaries-cn.json */; };
 		75CD83394F42DA6CDF4E8DC5 /* china-city.json in Resources */ = {isa = PBXBuildFile; fileRef = 64D80E08401E100AD86C6A83 /* china-city.json */; };
 		7CBAEC9BE1782DB36AF6ECC3 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEFA14059C39B57F9BDE5D65 /* APIClient.swift */; };
 		8D11F4E82578CCA3352975BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A5EB0A3C3E099EB35BF6B2C /* Assets.xcassets */; };
@@ -38,6 +40,8 @@
 /* Begin PBXFileReference section */
 		01791CFB460196E0DE852FE5 /* LocalLibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLibraryStore.swift; sourceTree = "<group>"; };
 		028819D6261EE1D9FF8CB599 /* SelectionListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionListViewController.swift; sourceTree = "<group>"; };
+		10B59BE205274E30A454EB27 /* AdministrativeBoundaryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdministrativeBoundaryStore.swift; sourceTree = "<group>"; };
+		1974D4EE28DF48FCA96C34CF /* admin-boundaries-cn.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "admin-boundaries-cn.json"; sourceTree = "<group>"; };
 		268371BBF8AEB3F832B44DC6 /* MapDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapDetailViewController.swift; sourceTree = "<group>"; };
 		3D9F9040F7028B7930E333E5 /* MapWorkbenchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapWorkbenchViewController.swift; sourceTree = "<group>"; };
 		40533C814E4FC644D51291B3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -70,6 +74,7 @@
 		108E923ACA4B715F1445C107 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				10B59BE205274E30A454EB27 /* AdministrativeBoundaryStore.swift */,
 				8EE249272939164F7D66E650 /* AIMetadataService.swift */,
 				CEFA14059C39B57F9BDE5D65 /* APIClient.swift */,
 				503567727D97B7F2A168563E /* AppContainer.swift */,
@@ -179,6 +184,7 @@
 		BF01DC8EF5EFA9BF1DE8AF69 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				1974D4EE28DF48FCA96C34CF /* admin-boundaries-cn.json */,
 				DFCF9B2CADAD111D3B35E096 /* china-area.json */,
 				64D80E08401E100AD86C6A83 /* china-city.json */,
 				C881DF5B6F69A70C32F46AC6 /* china-province.json */,
@@ -275,6 +281,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D11F4E82578CCA3352975BF /* Assets.xcassets in Resources */,
+				70B18D5512F442D89D636783 /* admin-boundaries-cn.json in Resources */,
 				91241BFEF91331333A9F016F /* china-area.json in Resources */,
 				75CD83394F42DA6CDF4E8DC5 /* china-city.json in Resources */,
 				EC1782CA99680B9513ADAA74 /* china-province.json in Resources */,
@@ -289,6 +296,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				59F6C3F0B66B4B8890BCF11D /* AdministrativeBoundaryStore.swift in Sources */,
 				CA30E2371AC2DFB7A1566910 /* AIMetadataService.swift in Sources */,
 				7CBAEC9BE1782DB36AF6ECC3 /* APIClient.swift in Sources */,
 				4FA7127514EF123E107CB98A /* AppContainer.swift in Sources */,

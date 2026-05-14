@@ -834,7 +834,8 @@ private final class SettingsDetailViewController: UIViewController {
     if model.isEmpty {
       return provider.defaultModel
     }
-    if provider == .openAICompatible {
+    // For providers that require explicit model IDs, keep whatever the user typed
+    if provider.defaultModel.isEmpty {
       return model
     }
     let builtInDefaults = AppSettings.AIProvider.allCases.map(\.defaultModel).filter { !$0.isEmpty }
@@ -847,12 +848,13 @@ private final class SettingsDetailViewController: UIViewController {
   private func validateAIModelForSelectedProvider() -> Bool {
     let provider = selectedAIProvider()
     let model = String(aiModelField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    guard provider == .openAICompatible, model.isEmpty else {
+    // Providers with empty default models require explicit model ID
+    guard provider.defaultModel.isEmpty, model.isEmpty else {
       return true
     }
     container.haptics.warning()
-    aiModelStatusLabel.text = "兼容接口必须填写模型 ID，例如供应商控制台给出的 qwen-vl-max、moonshot-v1-8k、claude-3-5-sonnet 等。"
-    showMessage(title: "缺少模型 ID", message: "兼容接口不会自动使用 OpenAI 默认模型。请填写供应商要求的精确模型 ID 后再保存或测试。")
+    aiModelStatusLabel.text = "该接口必须填写模型 ID，例如供应商控制台给出的精确模型 ID。"
+    showMessage(title: "缺少模型 ID", message: "该接口不会自动使用默认模型。请填写供应商要求的精确模型 ID 后再保存或测试。")
     return false
   }
 
@@ -883,6 +885,18 @@ private final class SettingsDetailViewController: UIViewController {
       aiModelStatusLabel.text = "DeepSeek 默认使用 deepseek-v4-flash；也可以手动填写 deepseek-v4-pro。"
     case .openAI:
       aiModelStatusLabel.text = "填写 OpenAI API Key 后，可从 OpenAI /v1/models 获取账号可用模型。ChatGPT 登录态不能直接给第三方 App 授权，需要使用 API Key。"
+    case .anthropic:
+      aiModelStatusLabel.text = "Anthropic Claude 使用 x-api-key 认证。推荐 claude-sonnet-4 或 claude-3-5-sonnet。"
+    case .google:
+      aiModelStatusLabel.text = "Google Gemini 推荐 gemini-2.5-flash 或 gemini-2.5-pro。"
+    case .moonshot:
+      aiModelStatusLabel.text = "Moonshot AI (Kimi) 推荐 moonshot-v1-128k 或 kimi-k2.6。"
+    case .zhipu:
+      aiModelStatusLabel.text = "智谱 AI 推荐 glm-4v-flash（支持视觉）或 glm-4-flash。"
+    case .qwen:
+      aiModelStatusLabel.text = "通义千问推荐 qwen-vl-max（支持视觉）或 qwen-max。"
+    case .doubao:
+      aiModelStatusLabel.text = "豆包（火山引擎）需要在控制台创建推理接入点，填写接入点 ID 作为模型 ID。"
     case .openAICompatible:
       aiModelStatusLabel.text = "兼容接口必须填写精确模型 ID；若服务实现 /models，也可尝试获取后选择。"
     }
@@ -1180,7 +1194,7 @@ private final class AIProviderDetailViewController: UITableViewController {
     case .endpoint:
       return "留空则使用默认端点；请求时会自动补齐 /chat/completions。"
     case .model:
-      return configuration.provider == .openAICompatible ? "兼容接口必须填写供应商给出的精确模型 ID。" : nil
+      return configuration.provider.defaultModel.isEmpty ? "该接口必须填写供应商给出的精确模型 ID。" : nil
     case .status:
       return "启用后会立即切换为当前 AI 请求使用的配置。"
     default:
@@ -1284,8 +1298,8 @@ private final class AIProviderDetailViewController: UITableViewController {
     let apiURL = String(apiURLField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let model = String(modelField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let prompt = String(promptView.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    if configuration.provider == .openAICompatible && model.isEmpty {
-      showMessage(title: "缺少模型 ID", message: "兼容接口必须填写供应商给出的精确模型 ID。")
+    if configuration.provider.defaultModel.isEmpty && model.isEmpty {
+      showMessage(title: "缺少模型 ID", message: "该接口必须填写供应商给出的精确模型 ID。")
       return nil
     }
 
@@ -1350,6 +1364,18 @@ private final class AIProviderDetailViewController: UITableViewController {
       modelStatusLabel.text = "DeepSeek 默认使用 deepseek-v4-flash；也可以手动填写 deepseek-v4-pro。"
     case .openAI:
       modelStatusLabel.text = "可从 OpenAI /v1/models 获取账号可用模型。"
+    case .anthropic:
+      modelStatusLabel.text = "推荐 claude-sonnet-4 或 claude-3-5-sonnet。"
+    case .google:
+      modelStatusLabel.text = "推荐 gemini-2.5-flash 或 gemini-2.5-pro。"
+    case .moonshot:
+      modelStatusLabel.text = "推荐 moonshot-v1-128k 或 kimi-k2.6。"
+    case .zhipu:
+      modelStatusLabel.text = "推荐 glm-4v-flash（支持视觉）。"
+    case .qwen:
+      modelStatusLabel.text = "推荐 qwen-vl-max（支持视觉）。"
+    case .doubao:
+      modelStatusLabel.text = "填写火山引擎控制台创建的推理接入点 ID。"
     case .openAICompatible:
       modelStatusLabel.text = "若服务实现 /models，可尝试获取后选择。"
     }

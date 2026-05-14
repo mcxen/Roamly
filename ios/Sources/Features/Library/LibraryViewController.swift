@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import ImageIO
 
-final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, PHPickerViewControllerDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching {
+final class LibraryViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, PHPickerViewControllerDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIDocumentPickerDelegate {
   private enum LibraryLayoutMode: Equatable {
     case list
     case square
@@ -489,12 +489,65 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
   }
 
   @objc private func importImages() {
+    let alert = UIAlertController(title: "导入地图", message: nil, preferredStyle: .actionSheet)
+    alert.addAction(UIAlertAction(title: "从相册选择", style: .default) { [weak self] _ in
+      self?.pickFromPhotos()
+    })
+    alert.addAction(UIAlertAction(title: "从文件选择", style: .default) { [weak self] _ in
+      self?.pickFromFiles()
+    })
+    alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+    if let popover = alert.popoverPresentationController {
+      popover.barButtonItem = navigationItem.rightBarButtonItem
+    }
+    present(alert, animated: true)
+  }
+
+  private func pickFromPhotos() {
     var configuration = PHPickerConfiguration(photoLibrary: .shared())
     configuration.selectionLimit = 0
     configuration.filter = .images
     let picker = PHPickerViewController(configuration: configuration)
     picker.delegate = self
     present(picker, animated: true)
+  }
+
+  private func pickFromFiles() {
+    let supportedTypes: [UTType] = [.image, .jpeg, .png, .heic, .gif, .webP, .tiff, .bmp]
+    let picker = UIDocumentPickerViewController(forOpeningContentTypes: supportedTypes, asCopy: true)
+    picker.allowsMultipleSelection = true
+    picker.delegate = self
+    present(picker, animated: true)
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    guard !urls.isEmpty else { return }
+    container.haptics.mediumTap()
+
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let validURLs = urls.filter { url in
+          let ext = url.pathExtension.lowercased()
+          return ["jpg", "jpeg", "png", "heic", "gif", "webp", "tiff", "tif", "bmp"].contains(ext)
+        }
+        guard !validURLs.isEmpty else {
+          self.showMessage(title: "无法导入", message: "所选文件不包含支持的图片格式（JPG、PNG、HEIC、GIF、WebP、TIFF）。")
+          return
+        }
+        _ = try self.container.store.importLocalImages(fileURLs: validURLs)
+        _ = try await self.container.ocrIndexService.indexRecordsNeedingOCR()
+        self.container.haptics.success()
+        self.reloadLibrary()
+      } catch {
+        self.container.haptics.error()
+        self.showMessage(title: "导入失败", message: error.localizedDescription)
+      }
+    }
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    // No action needed
   }
 
   @objc private func filterTapped(_ sender: UIButton) {
@@ -788,12 +841,25 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
         self.openDetail(for: record)
       }
 
+      let aiExtract = UIAction(title: "AI 提取", image: UIImage(systemName: "sparkles")) { _ in
+        self.container.haptics.mediumTap()
+        self.runAIExtract(for: record)
+      }
+
+      let favorite = UIAction(
+        title: record.favorite ? "取消收藏" : "加入收藏",
+        image: UIImage(systemName: record.favorite ? "star.slash" : "star.fill")
+      ) { _ in
+        self.container.haptics.selectionChanged()
+        self.toggleFavorite(for: record)
+      }
+
       let delete = UIAction(title: "删除", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
         self.container.haptics.warning()
         self.confirmDelete(record: record)
       }
 
-      return UIMenu(title: "", children: [edit, delete])
+      return UIMenu(title: "", children: [edit, aiExtract, favorite, delete])
     })
   }
 
@@ -834,6 +900,12 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
     alert.addAction(UIAlertAction(title: "编辑信息", style: .default) { [weak self] _ in
       self?.openDetail(for: record)
     })
+    alert.addAction(UIAlertAction(title: "AI 提取元数据", style: .default) { [weak self] _ in
+      self?.runAIExtract(for: record)
+    })
+    alert.addAction(UIAlertAction(title: record.favorite ? "取消收藏" : "加入收藏", style: .default) { [weak self] _ in
+      self?.toggleFavorite(for: record)
+    })
     alert.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
       self?.delete(record: record)
     })
@@ -843,6 +915,100 @@ final class LibraryViewController: UIViewController, UICollectionViewDataSource,
       popover.sourceRect = sourceView.bounds
     }
     present(alert, animated: true)
+  }
+
+  private func runAIExtract(for record: MapRecord) {
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        let updated = try await self.container.aiMetadataService.organizeRecord(record) { message in
+          Task { @MainActor in
+            // Progress is shown via the AI progress center
+          }
+        }
+        self.container.haptics.success()
+        if let index = self.allRecords.firstIndex(where: { $0.id == updated.id }) {
+          self.allRecords[index] = updated
+        }
+        self.applySearch()
+      } catch {
+        self.container.haptics.error()
+        self.showMessage(title: "AI 提取失败", message: error.localizedDescription)
+      }
+    }
+  }
+
+  private func toggleFavorite(for record: MapRecord) {
+    let updated = record.withEditableMetadata(
+      title: record.title,
+      description: record.description,
+      yearLabel: record.yearLabel ?? "",
+      campaign: record.campaign ?? "",
+      teachingUse: record.teachingUse ?? "",
+      teachingNote: record.teachingNote ?? "",
+      securityLevel: record.securityLevel ?? "",
+      scopeLevel: record.scopeLevel,
+      countryCode: record.countryCode,
+      countryName: record.countryName ?? "",
+      province: record.province ?? "",
+      city: record.city ?? "",
+      district: record.district ?? "",
+      tags: record.tags
+    )
+    // Toggle favorite by creating a new record with toggled value
+    let toggled = MapRecord(
+      id: updated.id,
+      fileName: updated.fileName,
+      title: updated.title,
+      description: updated.description,
+      tags: updated.tags,
+      collectionUnit: updated.collectionUnit,
+      scopeLevel: updated.scopeLevel,
+      countryCode: updated.countryCode,
+      countryName: updated.countryName,
+      province: updated.province,
+      relatedCountries: updated.relatedCountries,
+      relatedProvinces: updated.relatedProvinces,
+      city: updated.city,
+      district: updated.district,
+      latitude: updated.latitude,
+      longitude: updated.longitude,
+      northLatitude: updated.northLatitude,
+      southLatitude: updated.southLatitude,
+      eastLongitude: updated.eastLongitude,
+      westLongitude: updated.westLongitude,
+      coverageOutline: updated.coverageOutline,
+      yearLabel: updated.yearLabel,
+      campaign: updated.campaign,
+      teachingUse: updated.teachingUse,
+      teachingNote: updated.teachingNote,
+      securityLevel: updated.securityLevel,
+      favorite: !record.favorite,
+      mime: updated.mime,
+      width: updated.width,
+      height: updated.height,
+      sizeBytes: updated.sizeBytes,
+      mtimeMs: updated.mtimeMs,
+      updatedAt: ISO8601DateFormatter().string(from: Date()),
+      createdAt: updated.createdAt,
+      source: updated.source,
+      ocrStatus: updated.ocrStatus,
+      ocrExcerpt: updated.ocrExcerpt,
+      ocrText: updated.ocrText,
+      importedAt: updated.importedAt,
+      files: updated.files
+    )
+    do {
+      try container.store.updateRecord(toggled)
+      container.haptics.success()
+      if let index = allRecords.firstIndex(where: { $0.id == toggled.id }) {
+        allRecords[index] = toggled
+      }
+      applySearch()
+    } catch {
+      container.haptics.error()
+      showMessage(title: "操作失败", message: error.localizedDescription)
+    }
   }
 
   private func delete(record: MapRecord) {
