@@ -1,5 +1,7 @@
 # Roamly
 
+![Alt](https://repobeats.axiom.co/api/embed/a9e653259ec21facfd8fa8fad95ce24352a78349.svg "Repobeats analytics image")
+
 Roamly 是一个用于历史地图与地图图片整理、检索、标注和浏览的本地优先地图管理系统。
 
 它提供三栏式界面：
