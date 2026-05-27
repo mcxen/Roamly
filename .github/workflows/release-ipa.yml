@@ -23,7 +23,6 @@ jobs:
       SCHEME: RoamlyMobile
       PROJECT: ios/RoamlyMobile.xcodeproj
       BUNDLE_ID: com.openspring.roamly.mobile
-      EXPORT_OPTIONS: ios/ExportOptions.plist
 
     steps:
       - name: Checkout
@@ -53,29 +52,6 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "artifact=RoamlyMobile-${VERSION}.ipa" >> $GITHUB_OUTPUT
 
-      - name: Create ExportOptions.plist
-        shell: bash
-        run: |
-          mkdir -p ios/export
-          cat > "${{ env.EXPORT_OPTIONS }}" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>teamID</key>
-              <string></string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>compileBitcode</key>
-              <false/>
-              <key>iCloudContainerEnvironment</key>
-              <string>Development</string>
-          </dict>
-          </plist>
-          PLIST
-
       - name: Build Archive
         working-directory: ios
         shell: bash
@@ -95,24 +71,19 @@ jobs:
       - name: Export IPA
         shell: bash
         run: |
-          xcodebuild -exportArchive \
-            -archivePath "${{ runner.temp }}/RoamlyMobile.xcarchive" \
-            -exportPath "${{ runner.temp }}/export" \
-            -exportOptionsPlist "${{ env.EXPORT_OPTIONS }}" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tail -20
+          APP_PATH="${{ runner.temp }}/RoamlyMobile.xcarchive/Products/Applications/RoamlyMobile.app"
 
-          # xcodebuild may fail to export without signing; manually create IPA
-          if [ ! -f "${{ runner.temp }}/export/RoamlyMobile.ipa" ]; then
-            echo "Manual IPA packaging..."
-            APP_PATH="${{ runner.temp }}/RoamlyMobile.xcarchive/Products/Applications/RoamlyMobile.app"
-            mkdir -p Payload
-            cp -R "$APP_PATH" Payload/
-            zip -r "${{ runner.temp }}/export/RoamlyMobile.ipa" Payload
-            rm -rf Payload
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Error: .app bundle not found at $APP_PATH"
+            exit 1
           fi
+
+          echo "Manual IPA packaging..."
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r "${{ runner.temp }}/export/RoamlyMobile.ipa" Payload
+          rm -rf Payload
+          echo "IPA created at ${{ runner.temp }}/export/RoamlyMobile.ipa"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
