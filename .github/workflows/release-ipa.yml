@@ -1,0 +1,143 @@
+name: Build and Release IPA
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 1.0.0"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Roamly Mobile IPA
+    runs-on: macos-15
+
+    env:
+      SCHEME: RoamlyMobile
+      PROJECT: ios/RoamlyMobile.xcodeproj
+      BUNDLE_ID: com.openspring.roamly.mobile
+      EXPORT_OPTIONS: ios/ExportOptions.plist
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Show Xcode Version
+        run: xcodebuild -version
+
+      - name: Resolve Version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION#v}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="0.0.0-ci"
+            TAG="ci"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "artifact=RoamlyMobile-${VERSION}.ipa" >> $GITHUB_OUTPUT
+
+      - name: Create ExportOptions.plist
+        shell: bash
+        run: |
+          mkdir -p ios/export
+          cat > "${{ env.EXPORT_OPTIONS }}" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>teamID</key>
+              <string></string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>iCloudContainerEnvironment</key>
+              <string>Development</string>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Build Archive
+        working-directory: ios
+        shell: bash
+        run: |
+          xcodebuild archive \
+            -project RoamlyMobile.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Release \
+            -archivePath "${{ runner.temp }}/RoamlyMobile.xcarchive" \
+            -destination "generic/platform=iOS" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            2>&1 | tail -50
+
+      - name: Export IPA
+        shell: bash
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "${{ runner.temp }}/RoamlyMobile.xcarchive" \
+            -exportPath "${{ runner.temp }}/export" \
+            -exportOptionsPlist "${{ env.EXPORT_OPTIONS }}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -20
+
+          # xcodebuild may fail to export without signing; manually create IPA
+          if [ ! -f "${{ runner.temp }}/export/RoamlyMobile.ipa" ]; then
+            echo "Manual IPA packaging..."
+            APP_PATH="${{ runner.temp }}/RoamlyMobile.xcarchive/Products/Applications/RoamlyMobile.app"
+            mkdir -p Payload
+            cp -R "$APP_PATH" Payload/
+            zip -r "${{ runner.temp }}/export/RoamlyMobile.ipa" Payload
+            rm -rf Payload
+          fi
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.artifact }}
+          path: ${{ runner.temp }}/export/RoamlyMobile.ipa
+          retention-days: 7
+
+      - name: Create App Bundle Zip
+        shell: bash
+        run: |
+          APP_PATH="${{ runner.temp }}/RoamlyMobile.xcarchive/Products/Applications/RoamlyMobile.app"
+          if [ -d "$APP_PATH" ]; then
+            cd "$(dirname "$APP_PATH")"
+            zip -r "${{ runner.temp }}/RoamlyMobile-${{ steps.version.outputs.version }}.app.zip" RoamlyMobile.app
+          fi
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Roamly Mobile ${{ steps.version.outputs.version }}
+          files: |
+            ${{ runner.temp }}/export/RoamlyMobile.ipa
+            ${{ runner.temp }}/RoamlyMobile-${{ steps.version.outputs.version }}.app.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') || github.event_name == 'workflow_dispatch' }}
