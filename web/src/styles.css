@@ -942,15 +942,16 @@ body.resizing-panes * {
   z-index: 80;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 24px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .settings-dialog {
-  width: min(1100px, calc(100vw - 48px));
-  min-width: min(900px, calc(100vw - 48px));
-  max-height: 80vh;
+  width: 1100px;
+  height: 85vh;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -966,6 +967,7 @@ body.resizing-panes * {
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
 .settings-head h3 {
@@ -977,6 +979,7 @@ body.resizing-panes * {
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .settings-tabs {
@@ -987,7 +990,7 @@ body.resizing-panes * {
   flex: 0 0 200px;
   padding: 16px 12px;
   border-right: 1px solid var(--line);
-  overflow-y: auto;
+  overflow: hidden;
   background: rgba(247, 239, 219, 0.55);
 }
 
@@ -1317,11 +1320,6 @@ body.resizing-panes * {
     width: 100%;
   }
 
-  .settings-dialog {
-    width: calc(100vw - 32px);
-    min-width: 0;
-  }
-
   .count-line {
     align-items: flex-start;
   }
@@ -1336,6 +1334,13 @@ body.resizing-panes * {
 }
 
 @media (max-width: 767px) {
+  .settings-dialog {
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+  }
+
   .settings-layout {
     flex-direction: column;
   }
@@ -1369,6 +1374,7 @@ body.resizing-panes * {
 
   .settings-body {
     padding: 14px;
+    overflow-y: auto;
   }
 
   .settings-block {
@@ -1586,13 +1592,14 @@ body.resizing-panes * {
 
   .settings-mask {
     padding: 0;
-    align-items: flex-end;
+    align-items: flex-start;
   }
 
   .settings-dialog {
     width: 100vw;
-    max-height: 92vh;
-    min-width: 0;
+    height: 90vh;
+    max-width: 100vw;
+    max-height: 90vh;
     border-radius: 14px 14px 0 0;
   }
 
