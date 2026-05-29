@@ -43,6 +43,26 @@ export const api = {
   async aiProviders() {
     return handle(await fetch('/api/ai/providers'));
   },
+  async aiUsage({ providerId, days, limit } = {}) {
+    const query = new URLSearchParams();
+    if (providerId) query.set('providerId', providerId);
+    if (days) query.set('days', days);
+    if (limit) query.set('limit', limit);
+    const suffix = query.toString();
+    return handle(await fetch(`/api/ai/usage${suffix ? `?${suffix}` : ''}`));
+  },
+  async aiUsageSummary({ days } = {}) {
+    const query = new URLSearchParams();
+    if (days) query.set('days', days);
+    const suffix = query.toString();
+    return handle(await fetch(`/api/ai/usage/summary${suffix ? `?${suffix}` : ''}`));
+  },
+  async aiUsageProviders(days) {
+    const query = new URLSearchParams();
+    if (days) query.set('days', days);
+    const suffix = query.toString();
+    return handle(await fetch(`/api/ai/usage/providers${suffix ? `?${suffix}` : ''}`));
+  },
   async aiProviderConfigs() {
     return handle(await fetch('/api/ai/provider-configs'));
   },

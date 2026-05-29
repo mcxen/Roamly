@@ -64,6 +64,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_maps_source ON maps(source);
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ai_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider_id TEXT NOT NULL,
+    provider_name TEXT,
+    model TEXT,
+    operation TEXT NOT NULL,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    latency_ms INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'success',
+    error_message TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ai_usage_provider ON ai_usage(provider_id);
+  CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at);
+  CREATE INDEX IF NOT EXISTS idx_ai_usage_operation ON ai_usage(operation);
+`);
+
 const maybeAddColumn = (columnSql) => {
   try {
     db.exec(`ALTER TABLE maps ADD COLUMN ${columnSql}`);
@@ -77,6 +98,14 @@ const maybeCreateIndex = (indexSql) => {
     db.exec(indexSql);
   } catch (_err) {
     // ignore when column missing in legacy db
+  }
+};
+
+const maybeAddAIUsageColumn = (columnSql) => {
+  try {
+    db.exec(`ALTER TABLE ai_usage ADD COLUMN ${columnSql}`);
+  } catch (_err) {
+    // ignore migration conflict when column exists
   }
 };
 
@@ -112,6 +141,19 @@ maybeAddColumn('ocr_mtime_ms INTEGER');
 
 maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_maps_related_countries ON maps(related_countries)');
 maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_maps_related_provinces ON maps(related_provinces)');
+
+maybeAddAIUsageColumn('provider_name TEXT');
+maybeAddAIUsageColumn('model TEXT');
+maybeAddAIUsageColumn('prompt_tokens INTEGER DEFAULT 0');
+maybeAddAIUsageColumn('completion_tokens INTEGER DEFAULT 0');
+maybeAddAIUsageColumn('total_tokens INTEGER DEFAULT 0');
+maybeAddAIUsageColumn('latency_ms INTEGER DEFAULT 0');
+maybeAddAIUsageColumn("status TEXT DEFAULT 'success'");
+maybeAddAIUsageColumn('error_message TEXT');
+
+maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_ai_usage_provider ON ai_usage(provider_id)');
+maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage(created_at)');
+maybeCreateIndex('CREATE INDEX IF NOT EXISTS idx_ai_usage_operation ON ai_usage(operation)');
 
 export const statements = {
   upsertMap: db.prepare(`

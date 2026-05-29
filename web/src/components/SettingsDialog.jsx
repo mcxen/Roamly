@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bot, Compass, Database, Rss, ScanLine, Settings } from 'lucide-react';
 import AISettings from './AISettings.jsx';
 import { api } from '../api.js';
 
@@ -164,15 +165,26 @@ const BAND_COLORS = {
   green: '#22c55e', cyan: '#06b6d4', blue: '#3b82f6', purple: '#a855f7', '未设置': '#94a3b8'
 };
 
+const SETTINGS_TABS = [
+  { id: 'display', label: '显示', Icon: Settings },
+  { id: 'storage', label: '存储', Icon: Database },
+  { id: 'ai', label: 'AI', Icon: Bot },
+  { id: 'ocr', label: 'OCR', Icon: ScanLine },
+  { id: 'discover', label: '发现', Icon: Compass },
+  { id: 'rss', label: 'RSS', Icon: Rss }
+];
+
 export default function SettingsDialog({
   onClose, uiSettings, setUiSettings,
   storageForm, setStorageForm, browserState, loadBrowser,
   applyStorageSettings, loadStorageFolders, busy, status,
   ocrStatus, handleOcrReindex,
-  aiForm, setAIForm, aiModels, aiModelsBusy, aiBusy,
-  aiTestBusy, aiTestResult, saveAISettings, fetchAIModels,
-  testAIConnection, handleAIExtract, handleBatchAIExtract,
-  selectedMap, maps, aiModelsKeyRef, stats
+  aiProviders, activeProviderId, providerPresets, selectedProviderId,
+  setSelectedProviderId, aiModels, aiModelsBusy, aiBusy,
+  aiTestBusy, aiTestResult, saveAIProvider, deleteAIProvider,
+  activateAIProvider, fetchAIModels, testAIConnection,
+  handleAIExtract, handleBatchAIExtract, selectedMap, maps,
+  aiUsageData, refreshAIUsage, stats
 }) {
   const [tab, setTab] = useState('display');
 
@@ -183,16 +195,22 @@ export default function SettingsDialog({
           <h3>系统设置</h3>
           <button onClick={onClose}>✕</button>
         </div>
-        <div className="settings-tabs">
-          <button className={tab === 'display' ? 'active' : ''} onClick={() => setTab('display')}>显示</button>
-          <button className={tab === 'storage' ? 'active' : ''} onClick={() => setTab('storage')}>存储</button>
-          <button className={tab === 'ai' ? 'active' : ''} onClick={() => setTab('ai')}>AI</button>
-          <button className={tab === 'ocr' ? 'active' : ''} onClick={() => setTab('ocr')}>OCR</button>
-          <button className={tab === 'discover' ? 'active' : ''} onClick={() => setTab('discover')}>发现</button>
-          <button className={tab === 'rss' ? 'active' : ''} onClick={() => setTab('rss')}>RSS</button>
-        </div>
-        <div className="settings-body">
-          {tab === 'display' ? (
+        <div className="settings-layout">
+          <nav className="settings-tabs settings-sidebar" aria-label="设置分类">
+            {SETTINGS_TABS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                className={`settings-nav-item ${tab === id ? 'settings-nav-active active' : ''}`}
+                onClick={() => setTab(id)}
+                type="button"
+              >
+                <Icon size={16} strokeWidth={2} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="settings-body settings-content">
+            {tab === 'display' ? (
             <div className="settings-block">
               <label className="settings-check">
                 <input type="checkbox" checked={Boolean(uiSettings.thumbnailLabelVisible)} onChange={(e) => setUiSettings((p) => ({ ...p, thumbnailLabelVisible: e.target.checked }))} />
@@ -282,12 +300,17 @@ export default function SettingsDialog({
             </div>
           ) : tab === 'ai' ? (
             <AISettings
-              aiForm={aiForm} setAIForm={setAIForm} aiModels={aiModels}
-              aiModelsBusy={aiModelsBusy} aiBusy={aiBusy} aiTestBusy={aiTestBusy}
-              aiTestResult={aiTestResult} saveAISettings={saveAISettings}
+              providers={aiProviders} activeProviderId={activeProviderId}
+              providerPresets={providerPresets} selectedProviderId={selectedProviderId}
+              setSelectedProviderId={setSelectedProviderId}
+              aiModels={aiModels} aiModelsBusy={aiModelsBusy} aiBusy={aiBusy}
+              aiTestBusy={aiTestBusy} aiTestResult={aiTestResult}
+              saveAIProvider={saveAIProvider} deleteAIProvider={deleteAIProvider}
+              activateAIProvider={activateAIProvider}
               fetchAIModels={fetchAIModels} testAIConnection={testAIConnection}
               handleAIExtract={handleAIExtract} handleBatchAIExtract={handleBatchAIExtract}
-              selectedMap={selectedMap} maps={maps} aiModelsKeyRef={aiModelsKeyRef}
+              selectedMap={selectedMap} maps={maps}
+              usageData={aiUsageData} refreshUsage={refreshAIUsage}
             />
           ) : tab === 'ocr' ? (
             <div className="settings-block">
@@ -302,6 +325,7 @@ export default function SettingsDialog({
           ) : tab === 'rss' ? (
             <RssSettings />
           ) : null}
+          </div>
         </div>
       </div>
     </div>

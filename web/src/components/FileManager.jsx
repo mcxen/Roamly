@@ -29,8 +29,8 @@ const BAND_COLORS = {
 function ProgressBar({ value, max = 100, className = '' }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className={`tw-h-2 tw-w-full tw-rounded-full tw-bg-slate-100 tw-overflow-hidden ${className}`}>
-      <div className="tw-h-full tw-rounded-full tw-bg-slate-900 tw-transition-all tw-duration-300 tw-ease-out" style={{ width: `${pct}%` }} />
+    <div className={`tw-h-2 tw-w-full tw-overflow-hidden tw-rounded-full tw-border tw-border-[#cbb58a] tw-bg-[#f5ead1] ${className}`}>
+      <div className="tw-h-full tw-rounded-full tw-bg-[#8f3f28] tw-transition-all tw-duration-300 tw-ease-out" style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -41,7 +41,7 @@ function AITaskPanel({ tasks, onRefresh }) {
     <Card className="tw-animate-in tw-slide-in-from-top-2 tw-duration-300">
       <CardHeader className="tw-py-3 tw-px-4">
         <div className="tw-flex tw-items-center tw-justify-between">
-          <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+          <CardTitle className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
             <Bot className="tw-w-4 tw-h-4" />
             AI 识别任务
           </CardTitle>
@@ -52,16 +52,16 @@ function AITaskPanel({ tasks, onRefresh }) {
       </CardHeader>
       <CardContent className="tw-pt-0 tw-px-4 tw-pb-3 tw-space-y-2">
         {tasks.map((task) => (
-          <div key={task.id} className="tw-rounded-lg tw-border tw-border-slate-200 tw-p-3 tw-space-y-2">
+          <div key={task.id} className="tw-space-y-2 tw-rounded-xl tw-border tw-border-[#c8b590] tw-bg-[#fffaf0] tw-p-3">
             <div className="tw-flex tw-items-center tw-justify-between tw-text-xs">
-              <span className="tw-text-slate-600">
-                {task.status === 'running' ? <Loader2 className="tw-w-3 tw-h-3 tw-inline tw-animate-spin tw-mr-1" /> : <CheckCircle2 className="tw-w-3 tw-h-3 tw-inline tw-text-green-600 tw-mr-1" />}
+              <span className="tw-text-[#5d564d]">
+                {task.status === 'running' ? <Loader2 className="tw-mr-1 tw-inline tw-h-3 tw-w-3 tw-animate-spin" /> : <CheckCircle2 className="tw-mr-1 tw-inline tw-h-3 tw-w-3 tw-text-[#3f6a4d]" />}
                 {task.status === 'running' ? '识别中' : '已完成'}
               </span>
-              <span className="tw-text-slate-500">{task.completed}/{task.total}</span>
+              <span className="tw-text-[#7c735d]">{task.completed}/{task.total}</span>
             </div>
             <ProgressBar value={task.completed} max={task.total} />
-            {task.errors > 0 && <p className="tw-text-xs tw-text-red-500">失败: {task.errors}</p>}
+            {task.errors > 0 && <p className="tw-text-xs tw-text-[#a33f26]">失败: {task.errors}</p>}
           </div>
         ))}
       </CardContent>
@@ -125,18 +125,19 @@ export default function FileManager({
   }, [aiTasks, refreshAITasks]);
 
   return (
-    <div className="tw-grid tw-grid-cols-1 lg:tw-grid-cols-[1fr_340px] tw-gap-4 tw-p-4 tw-flex-1 tw-min-h-0 tw-overflow-auto">
+    <div className="tw-flex-1 tw-min-h-0 tw-overflow-auto tw-bg-[linear-gradient(180deg,rgba(255,248,235,0.42),rgba(238,225,191,0.28))]">
+      <div className="tw-grid tw-grid-cols-1 tw-gap-4 tw-p-4 lg:tw-grid-cols-[1fr_340px]">
       {/* Main column */}
       <div className="tw-flex tw-flex-col tw-gap-4 tw-min-w-0">
         {/* Upload card */}
         <Card>
           <CardHeader className="tw-flex-row tw-items-center tw-justify-between tw-space-y-0 tw-pb-3">
             <div>
-              <CardTitle className="tw-text-lg tw-flex tw-items-center tw-gap-2">
+              <CardTitle className="tw-flex tw-items-center tw-gap-2 tw-text-lg">
                 <FolderOpen className="tw-w-5 tw-h-5" />
                 文件管理
               </CardTitle>
-              <CardDescription className="tw-mt-1">
+              <CardDescription className="tw-mt-2 tw-text-xs tw-uppercase tw-tracking-[0.18em]">
                 {status?.storageDriver === 'webdav'
                   ? `WebDAV: ${status?.webdav?.rootPath || '/'}`
                   : `目录: ${status?.storageDriver === 'server' ? (status?.serverMapDir || '未设置') : (status?.mapLibraryDir || '未设置')}`}
@@ -153,18 +154,19 @@ export default function FileManager({
           </CardHeader>
           <CardContent className="tw-space-y-4">
             <div
-              className={`tw-border-2 tw-border-dashed tw-rounded-lg tw-p-5 tw-text-center tw-transition-all tw-duration-200 ${dragOver ? 'tw-border-slate-900 tw-bg-slate-50 tw-scale-[1.01]' : 'tw-border-slate-200 tw-bg-slate-50/50'}`}
+              className={`tw-rounded-[16px] tw-border-2 tw-border-dashed tw-p-6 tw-text-center tw-transition-all tw-duration-200 ${dragOver ? 'tw-scale-[1.01] tw-border-[#8f3f28] tw-bg-[#f2dfad]' : 'tw-border-[#bfae90] tw-bg-[#fffaf0]'}`}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(e) => { setDragOver(false); handleFileDrop(e); }}
             >
-              <Upload className={`tw-w-7 tw-h-7 tw-mx-auto tw-mb-2 tw-transition-transform tw-duration-200 ${dragOver ? 'tw-text-slate-900 tw-scale-110' : 'tw-text-slate-400'}`} />
-              <p className="tw-font-medium tw-text-slate-700 tw-text-sm">{uploadFiles.length ? `已选择 ${uploadFiles.length} 个文件` : '拖入或选择地图文件'}</p>
-              <input type="file" accept="image/*" multiple className="tw-mt-2 tw-text-xs tw-file:mr-2 tw-file:rounded-md tw-file:border-0 tw-file:bg-slate-900 tw-file:px-2.5 tw-file:py-1 tw-file:text-xs tw-file:text-white tw-cursor-pointer" onChange={(e) => setUploadFiles(Array.from(e.target.files || []))} />
+              <Upload className={`tw-mx-auto tw-mb-2 tw-h-7 tw-w-7 tw-transition-transform tw-duration-200 ${dragOver ? 'tw-scale-110 tw-text-[#8f3f28]' : 'tw-text-[#8d7c61]'}`} />
+              <p className="tw-text-sm tw-font-semibold tw-tracking-[0.1em] tw-text-[#213449]">{uploadFiles.length ? `已选择 ${uploadFiles.length} 个文件` : '拖入或选择地图文件'}</p>
+              <p className="tw-mt-1 tw-text-[11px] tw-text-[#6f6758]">采用档案接收台式布局，先入库，再补元数据。</p>
+              <input type="file" accept="image/*" multiple className="tw-mt-3 tw-text-xs tw-file:mr-2 tw-file:rounded-md tw-file:border-0 tw-file:bg-[#213449] tw-file:px-2.5 tw-file:py-1 tw-file:text-xs tw-file:text-[#fbf6ea] tw-cursor-pointer" onChange={(e) => setUploadFiles(Array.from(e.target.files || []))} />
             </div>
             {uploading && (
               <div className="tw-space-y-1">
-                <div className="tw-flex tw-justify-between tw-text-xs tw-text-slate-500"><span>上传中</span><span>{Math.round(overallProgress)}%</span></div>
+                <div className="tw-flex tw-justify-between tw-text-xs tw-text-[#6f6758]"><span>上传中</span><span>{Math.round(overallProgress)}%</span></div>
                 <ProgressBar value={overallProgress} />
               </div>
             )}
@@ -176,11 +178,11 @@ export default function FileManager({
             </div>
             <div className="tw-flex tw-items-center tw-gap-3 tw-flex-wrap">
               <Button size="sm" onClick={handleUploadWithProgress} disabled={!uploadFiles.length || busy || uploading}>
-                {uploading ? <Loader2 className="tw-w-3.5 tw-h-3.5 tw-animate-spin" /> : <Upload className="tw-w-3.5 tw-h-3.5" />}
+                {uploading ? <Loader2 className="tw-h-3.5 tw-w-3.5 tw-animate-spin" /> : <Upload className="tw-h-3.5 tw-w-3.5" />}
                 {uploading ? '上传中...' : '上传'}
               </Button>
               {uploadFiles.length > 0 && !uploading && (
-                <span className="tw-text-xs tw-text-slate-500">{uploadFiles.map((f) => f.name).slice(0, 2).join('、')}{uploadFiles.length > 2 ? ` 等${uploadFiles.length}个` : ''}</span>
+                <span className="tw-text-xs tw-text-[#6f6758]">{uploadFiles.map((f) => f.name).slice(0, 2).join('、')}{uploadFiles.length > 2 ? ` 等${uploadFiles.length}个` : ''}</span>
               )}
             </div>
           </CardContent>
@@ -189,34 +191,34 @@ export default function FileManager({
         {/* File list */}
         <Card>
           <CardHeader className="tw-py-3 tw-px-4">
-            <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
-              <Image className="tw-w-4 tw-h-4" />
-              图片文件列表
-              {stats?.total ? <Badge variant="secondary" className="tw-text-[10px]">{stats.total}</Badge> : null}
-            </CardTitle>
-          </CardHeader>
+              <CardTitle className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
+                <Image className="tw-w-4 tw-h-4" />
+                图片文件列表
+                {stats?.total ? <Badge variant="secondary" className="tw-text-[10px] tw-uppercase">{stats.total}</Badge> : null}
+              </CardTitle>
+            </CardHeader>
           <CardContent className="tw-pt-0 tw-px-4 tw-pb-3">
             <div className="tw-grid tw-grid-cols-1 tw-gap-1.5 tw-max-h-[420px] tw-overflow-y-auto">
               {maps.map((item) => (
                 <div
                   key={item.id}
-                  className="tw-flex tw-items-center tw-gap-3 tw-rounded-lg tw-p-2 hover:tw-bg-slate-50 tw-cursor-pointer tw-transition-colors tw-group"
+                  className="tw-group tw-flex tw-cursor-pointer tw-items-center tw-gap-3 tw-rounded-xl tw-border tw-border-[#d3c3a7] tw-bg-[#fffaf0] tw-p-2.5 tw-transition-colors hover:tw-bg-[#f3e7c7]"
                   onClick={() => setViewImage(item)}
                 >
                   <img
                     src={`/api/files/${item.id}?max=80&quality=60`}
                     alt=""
-                    className="tw-w-10 tw-h-10 tw-rounded tw-object-cover tw-border tw-border-slate-200 tw-shrink-0"
+                    className="tw-h-12 tw-w-12 tw-shrink-0 tw-rounded-md tw-border tw-border-[#c8b590] tw-object-cover"
                     loading="lazy"
                   />
                   <div className="tw-flex-1 tw-min-w-0">
-                    <p className="tw-text-sm tw-truncate tw-text-slate-800">{item.title || item.file_name}</p>
-                    <p className="tw-text-[11px] tw-text-slate-400 tw-truncate">{[item.country_name, item.city, item.year_label].filter(Boolean).join(' · ') || item.source}</p>
+                    <p className="tw-truncate tw-text-sm tw-font-semibold tw-text-[#213449]">{item.title || item.file_name}</p>
+                    <p className="tw-truncate tw-text-[11px] tw-uppercase tw-tracking-[0.14em] tw-text-[#756c5c]">{[item.country_name, item.city, item.year_label].filter(Boolean).join(' · ') || item.source}</p>
                   </div>
                   {item.storage_band && <span className="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-shrink-0" style={{ background: BAND_COLORS[item.storage_band] || '#94a3b8' }} />}
                 </div>
               ))}
-              {!maps.length && <p className="tw-text-center tw-text-slate-400 tw-text-sm tw-py-6">暂无文件</p>}
+              {!maps.length && <p className="tw-py-6 tw-text-center tw-text-sm tw-text-[#7a715e]">暂无文件</p>}
             </div>
           </CardContent>
         </Card>
@@ -231,27 +233,27 @@ export default function FileManager({
         {stats && (
           <Card>
             <CardHeader className="tw-py-3 tw-px-4">
-              <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+              <CardTitle className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
                 <BarChart3 className="tw-w-4 tw-h-4" />
                 彩虹存储统计
               </CardTitle>
             </CardHeader>
             <CardContent className="tw-pt-0 tw-px-4 tw-pb-3 tw-space-y-3">
               <div className="tw-grid tw-grid-cols-3 tw-gap-2 tw-text-center">
-                <div className="tw-rounded-lg tw-bg-slate-50 tw-p-2"><p className="tw-text-lg tw-font-semibold">{stats.total}</p><p className="tw-text-[10px] tw-text-slate-500">总计</p></div>
-                <div className="tw-rounded-lg tw-bg-slate-50 tw-p-2"><p className="tw-text-lg tw-font-semibold">{stats.favorites}</p><p className="tw-text-[10px] tw-text-slate-500">收藏</p></div>
-                <div className="tw-rounded-lg tw-bg-slate-50 tw-p-2"><p className="tw-text-lg tw-font-semibold">{stats.withAI}</p><p className="tw-text-[10px] tw-text-slate-500">AI 已处理</p></div>
+                <div className="tw-rounded-xl tw-border tw-border-[#ccb992] tw-bg-[#fffaf0] tw-p-2"><p className="tw-text-lg tw-font-semibold tw-text-[#213449]">{stats.total}</p><p className="tw-text-[10px] tw-uppercase tw-tracking-[0.14em] tw-text-[#6f6758]">总计</p></div>
+                <div className="tw-rounded-xl tw-border tw-border-[#ccb992] tw-bg-[#fffaf0] tw-p-2"><p className="tw-text-lg tw-font-semibold tw-text-[#213449]">{stats.favorites}</p><p className="tw-text-[10px] tw-uppercase tw-tracking-[0.14em] tw-text-[#6f6758]">收藏</p></div>
+                <div className="tw-rounded-xl tw-border tw-border-[#ccb992] tw-bg-[#fffaf0] tw-p-2"><p className="tw-text-lg tw-font-semibold tw-text-[#213449]">{stats.withAI}</p><p className="tw-text-[10px] tw-uppercase tw-tracking-[0.14em] tw-text-[#6f6758]">AI 已处理</p></div>
               </div>
               <Separator />
               <div className="tw-space-y-1.5">
                 {(stats.storageBands || []).map((item) => (
                   <div key={item.band} className="tw-flex tw-items-center tw-gap-2 tw-text-xs">
                     <span className="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-shrink-0" style={{ background: BAND_COLORS[item.band] || '#94a3b8' }} />
-                    <span className="tw-w-10 tw-text-slate-600">{item.band}</span>
-                    <div className="tw-flex-1 tw-h-1.5 tw-rounded-full tw-bg-slate-100 tw-overflow-hidden">
+                    <span className="tw-w-10 tw-text-[#675e4e]">{item.band}</span>
+                    <div className="tw-flex-1 tw-h-1.5 tw-overflow-hidden tw-rounded-full tw-bg-[#eadfc5]">
                       <div className="tw-h-full tw-rounded-full tw-transition-all tw-duration-500" style={{ width: `${stats.total ? (item.count / stats.total) * 100 : 0}%`, background: BAND_COLORS[item.band] || '#94a3b8' }} />
                     </div>
-                    <span className="tw-w-8 tw-text-right tw-text-slate-500">{item.count}</span>
+                    <span className="tw-w-8 tw-text-right tw-text-[#7b725f]">{item.count}</span>
                   </div>
                 ))}
               </div>
@@ -272,13 +274,13 @@ export default function FileManager({
         {/* AI Assist */}
         <Card>
           <CardHeader className="tw-py-3 tw-px-4">
-            <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+            <CardTitle className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
               <Sparkles className="tw-w-4 tw-h-4" />
               AI 辅助
             </CardTitle>
           </CardHeader>
           <CardContent className="tw-pt-0 tw-px-4 tw-pb-3 tw-space-y-2">
-            <p className="tw-text-xs tw-text-slate-500">AI 自动识别地图内容，提取国家、城市、年代、经纬度范围等元数据。</p>
+            <p className="tw-text-xs tw-text-[#6f6758]">AI 自动识别地图内容，提取国家、城市、年代、经纬度范围等元数据。</p>
             <div className="tw-flex tw-flex-col tw-gap-2">
               <Button variant="outline" size="sm" onClick={handleBatchAIExtract} disabled={!maps.length || aiBusy} className="tw-w-full tw-justify-start">
                 <Bot className="tw-w-3.5 tw-h-3.5" />
@@ -290,8 +292,8 @@ export default function FileManager({
               </Button>
             </div>
             <div className="tw-grid tw-grid-cols-2 tw-gap-2 tw-text-center tw-mt-2">
-              <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-p-2"><p className="tw-text-sm tw-font-medium">{stats?.withOcr || 0}</p><p className="tw-text-[10px] tw-text-slate-500">OCR 完成</p></div>
-              <div className="tw-rounded-lg tw-border tw-border-slate-200 tw-p-2"><p className="tw-text-sm tw-font-medium">{stats?.withCoords || 0}</p><p className="tw-text-[10px] tw-text-slate-500">有坐标</p></div>
+              <div className="tw-rounded-xl tw-border tw-border-[#ccb992] tw-bg-[#fffaf0] tw-p-2"><p className="tw-text-sm tw-font-medium tw-text-[#213449]">{stats?.withOcr || 0}</p><p className="tw-text-[10px] tw-uppercase tw-tracking-[0.14em] tw-text-[#6f6758]">OCR 完成</p></div>
+              <div className="tw-rounded-xl tw-border tw-border-[#ccb992] tw-bg-[#fffaf0] tw-p-2"><p className="tw-text-sm tw-font-medium tw-text-[#213449]">{stats?.withCoords || 0}</p><p className="tw-text-[10px] tw-uppercase tw-tracking-[0.14em] tw-text-[#6f6758]">有坐标</p></div>
             </div>
           </CardContent>
         </Card>
@@ -299,14 +301,14 @@ export default function FileManager({
         {/* MCP */}
         <Card>
           <CardHeader className="tw-py-3 tw-px-4">
-            <CardTitle className="tw-text-sm tw-flex tw-items-center tw-gap-2">
+            <CardTitle className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
               <Server className="tw-w-4 tw-h-4" /> MCP
             </CardTitle>
           </CardHeader>
           <CardContent className="tw-pt-0 tw-px-4 tw-pb-3">
-            <p className="tw-text-xs tw-text-slate-500">工具: {mcpInfo?.tools?.length || 0}</p>
+            <p className="tw-text-xs tw-text-[#6f6758]">工具: {mcpInfo?.tools?.length || 0}</p>
             <div className="tw-flex tw-flex-wrap tw-gap-1 tw-mt-2">
-              {(mcpInfo?.tools || []).map((t) => <Badge key={t} variant="secondary" className="tw-text-[10px]">{t}</Badge>)}
+              {(mcpInfo?.tools || []).map((t) => <Badge key={t} variant="secondary" className="tw-text-[10px] tw-uppercase tw-tracking-[0.08em]">{t}</Badge>)}
             </div>
           </CardContent>
         </Card>
@@ -316,15 +318,16 @@ export default function FileManager({
       {viewImage && (
         <div className="tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80 tw-flex tw-items-center tw-justify-center tw-p-4 tw-animate-in tw-fade-in tw-duration-200" onClick={() => setViewImage(null)}>
           <div className="tw-relative tw-max-w-[90vw] tw-max-h-[90vh] tw-flex tw-flex-col tw-items-center" onClick={(e) => e.stopPropagation()}>
-            <img src={`/api/files/${viewImage.id}`} alt={viewImage.title || viewImage.file_name} className="tw-max-w-full tw-max-h-[80vh] tw-object-contain tw-rounded-lg tw-shadow-2xl" />
-            <div className="tw-mt-3 tw-text-center tw-text-white">
+            <img src={`/api/files/${viewImage.id}`} alt={viewImage.title || viewImage.file_name} className="tw-max-h-[80vh] tw-max-w-full tw-rounded-[18px] tw-border tw-border-[#d8c59c] tw-object-contain tw-bg-[#fbf6ea] tw-p-2 tw-shadow-2xl" />
+            <div className="tw-mt-3 tw-rounded-full tw-border tw-border-[#d8c59c] tw-bg-[#1d2b38]/85 tw-px-5 tw-py-2 tw-text-center tw-text-white">
               <p className="tw-font-medium">{viewImage.title || viewImage.file_name}</p>
-              <p className="tw-text-sm tw-text-white/70 tw-mt-1">{[viewImage.country_name, viewImage.city, viewImage.year_label].filter(Boolean).join(' · ')}</p>
+              <p className="tw-mt-1 tw-text-sm tw-text-white/70">{[viewImage.country_name, viewImage.city, viewImage.year_label].filter(Boolean).join(' · ')}</p>
             </div>
-            <button className="tw-absolute tw-top-2 tw-right-2 tw-w-8 tw-h-8 tw-rounded-full tw-bg-white/20 tw-text-white tw-flex tw-items-center tw-justify-center hover:tw-bg-white/40 tw-transition-colors tw-border-0 tw-cursor-pointer tw-text-lg" onClick={() => setViewImage(null)}>✕</button>
+            <button className="tw-absolute tw-top-2 tw-right-2 tw-flex tw-h-8 tw-w-8 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-full tw-border-0 tw-bg-white/20 tw-text-lg tw-text-white tw-transition-colors hover:tw-bg-white/40" onClick={() => setViewImage(null)}>✕</button>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -86,26 +86,6 @@ const DEFAULT_STORAGE_FORM = {
   }
 };
 
-const DEFAULT_AI_FORM = {
-  apiUrl: '',
-  apiKey: '',
-  model: '',
-  provider: 'openai-compatible',
-  systemPrompt: ''
-};
-
-const AI_PROVIDER_OPTIONS = [
-  { value: 'openai-compatible', label: 'OpenAI 兼容（自定义）' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic Claude' },
-  { value: 'google', label: 'Google Gemini' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'moonshot', label: 'Moonshot AI (Kimi)' },
-  { value: 'zhipu', label: '智谱 AI (GLM)' },
-  { value: 'qwen', label: '通义千问' },
-  { value: 'doubao', label: '豆包 (火山引擎)' }
-];
-
 const DEFAULT_UI_SETTINGS = {
   thumbnailLabelVisible: true,
   thumbnailLabelSize: 14,
@@ -258,12 +238,22 @@ function App() {
     children: []
   });
   const [storageForm, setStorageForm] = useState(DEFAULT_STORAGE_FORM);
-  const [aiForm, setAIForm] = useState(DEFAULT_AI_FORM);
+  const [aiProviders, setAIProviders] = useState([]);
+  const [activeProviderId, setActiveProviderId] = useState('');
+  const [providerPresets, setProviderPresets] = useState([]);
+  const [selectedProviderId, setSelectedProviderId] = useState('');
   const [aiBusy, setAIBusy] = useState(false);
   const [aiModels, setAIModels] = useState([]);
   const [aiModelsBusy, setAIModelsBusy] = useState(false);
   const [aiTestResult, setAITestResult] = useState(null);
   const [aiTestBusy, setAITestBusy] = useState(false);
+  const [aiUsageData, setAIUsageData] = useState({
+    summary: null,
+    recent: [],
+    providers: [],
+    loading: false,
+    error: ''
+  });
   const [viewerOpen, setViewerOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -334,6 +324,45 @@ function App() {
     '--right-pane-width': `${rightPaneWidth}px`
   }), [rightPaneWidth]);
 
+  const loadAIProviderConfigs = useCallback(async () => {
+    const data = await api.aiProviderConfigs();
+    const providers = Array.isArray(data.providers) ? data.providers : [];
+    const activeId = data.activeId || providers[0]?.id || '';
+    setAIProviders(providers);
+    setActiveProviderId(activeId);
+    setSelectedProviderId((prev) => prev || activeId || providers[0]?.id || '');
+    return { providers, activeId };
+  }, []);
+
+  const loadAIProviderPresets = useCallback(async () => {
+    try {
+      const data = await api.aiProviders();
+      setProviderPresets(Array.isArray(data.providers) ? data.providers : []);
+    } catch (_err) {
+      setProviderPresets([]);
+    }
+  }, []);
+
+  const refreshAIUsage = useCallback(async ({ providerId = '', days = 7, limit = 100 } = {}) => {
+    setAIUsageData((prev) => ({ ...prev, loading: true, error: '' }));
+    try {
+      const [summary, recent, providersData] = await Promise.all([
+        api.aiUsageSummary({ days }),
+        api.aiUsage({ providerId, days, limit }),
+        api.aiUsageProviders(days)
+      ]);
+      setAIUsageData({
+        summary,
+        recent: Array.isArray(recent.items) ? recent.items : [],
+        providers: Array.isArray(providersData.providers) ? providersData.providers : [],
+        loading: false,
+        error: ''
+      });
+    } catch (err) {
+      setAIUsageData((prev) => ({ ...prev, loading: false, error: err.message }));
+    }
+  }, []);
+
   const refreshStatus = useCallback(async () => {
     const data = await api.status();
     setStatus(data);
@@ -349,18 +378,12 @@ function App() {
         rootPath: data.webdav?.rootPath || '/'
       }
     });
-    setAIForm({
-      apiUrl: data.ai?.apiUrl || '',
-      apiKey: '',
-      model: data.ai?.model || '',
-      provider: data.ai?.provider || 'openai-compatible',
-      systemPrompt: data.ai?.systemPrompt || ''
-    });
+    loadAIProviderConfigs().catch(() => {});
     api.mcpTools()
       .then((info) => setMcpInfo(info))
       .catch(() => setMcpInfo(null));
     return data;
-  }, []);
+  }, [loadAIProviderConfigs]);
 
   const refreshOcrStatus = useCallback(async () => {
     try {
@@ -692,28 +715,27 @@ function App() {
     }
   };
 
-  const saveAISettings = async () => {
+  const saveAIProvider = async (provider) => {
     setAIBusy(true);
     try {
       const payload = {
-        apiUrl: aiForm.apiUrl,
-        model: aiForm.model,
-        provider: aiForm.provider,
-        systemPrompt: aiForm.systemPrompt
+        id: provider.id,
+        name: provider.name,
+        apiUrl: provider.apiUrl,
+        model: provider.model,
+        provider: provider.provider,
+        systemPrompt: provider.systemPrompt,
+        activate: provider.activate !== false
       };
-      if (String(aiForm.apiKey || '').trim()) {
-        payload.apiKey = aiForm.apiKey;
+      if (String(provider.apiKey || '').trim()) {
+        payload.apiKey = provider.apiKey;
       }
-      const data = await api.saveAISettings(payload);
-      setAIForm((prev) => ({
-        ...prev,
-        apiUrl: data.apiUrl || '',
-        apiKey: '',
-        model: data.model || '',
-        provider: data.provider || 'openai-compatible',
-        systemPrompt: data.systemPrompt || ''
-      }));
-      setMessage('AI 设置已保存');
+      const data = await api.saveAIProviderConfig(payload);
+      setAIProviders(Array.isArray(data.providers) ? data.providers : []);
+      setActiveProviderId(data.activeId || payload.id || '');
+      setSelectedProviderId(payload.id || data.id || data.activeId || '');
+      aiModelsKeyRef.current = '';
+      setMessage('AI Provider 已保存');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -721,51 +743,84 @@ function App() {
     }
   };
 
-  const fetchAIModels = useCallback(async (force = false) => {
-    const key = `${String(aiForm.apiUrl || '').trim()}|${String(aiForm.provider || '').trim()}|${Boolean(String(aiForm.apiKey || '').trim())}`;
+  const deleteAIProvider = async (id) => {
+    const target = String(id || '').trim();
+    if (!target) return;
+    if (!window.confirm('删除这个 AI Provider？')) return;
+    setAIBusy(true);
+    try {
+      const data = await api.deleteAIProviderConfig(target);
+      const providers = Array.isArray(data.providers) ? data.providers : [];
+      const activeId = data.activeId || providers[0]?.id || '';
+      setAIProviders(providers);
+      setActiveProviderId(activeId);
+      setSelectedProviderId(activeId || providers[0]?.id || '');
+      aiModelsKeyRef.current = '';
+      setAIModels([]);
+      setMessage('AI Provider 已删除');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAIBusy(false);
+    }
+  };
+
+  const activateAIProvider = async (id) => {
+    const target = String(id || '').trim();
+    if (!target) return;
+    setAIBusy(true);
+    try {
+      const data = await api.activateAIProvider(target);
+      setAIProviders(Array.isArray(data.providers) ? data.providers : []);
+      setActiveProviderId(data.activeId || target);
+      setSelectedProviderId(data.activeId || target);
+      setMessage('当前 AI Provider 已切换');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAIBusy(false);
+    }
+  };
+
+  const fetchAIModels = useCallback(async (provider, force = false) => {
+    if (!provider) return;
+    const key = `${String(provider.id || '').trim()}|${String(provider.apiUrl || '').trim()}|${String(provider.provider || '').trim()}|${Boolean(String(provider.apiKey || '').trim())}`;
     if (!force && aiModelsKeyRef.current === key && aiModels.length) {
       return;
     }
     setAIModelsBusy(true);
     try {
       const payload = {
-        apiUrl: aiForm.apiUrl,
-        provider: aiForm.provider
+        apiUrl: provider.apiUrl,
+        provider: provider.provider
       };
-      if (String(aiForm.apiKey || '').trim()) {
-        payload.apiKey = aiForm.apiKey;
+      if (String(provider.apiKey || '').trim()) {
+        payload.apiKey = provider.apiKey;
       }
       const data = await api.aiModels(payload);
       const models = Array.isArray(data.models) ? data.models : [];
       setAIModels(models);
       aiModelsKeyRef.current = key;
-      if (models.length && !models.some((item) => item.id === aiForm.model)) {
-        const preferred = models.find((item) => item.id === 'kimi-k2.6')
-          || models.find((item) => /kimi|gpt|qwen|glm|claude/i.test(item.id))
-          || models[0];
-        if (!aiForm.model && preferred?.id) {
-          setAIForm((prev) => ({ ...prev, model: preferred.id }));
-        }
-      }
       setMessage(`已获取 ${models.length} 个模型`);
     } catch (err) {
       setError(err.message);
     } finally {
       setAIModelsBusy(false);
     }
-  }, [aiForm.apiKey, aiForm.apiUrl, aiForm.model, aiForm.provider, aiModels.length]);
+  }, [aiModels.length]);
 
-  const testAIConnection = async () => {
+  const testAIConnection = async (provider) => {
+    if (!provider) return;
     setAITestBusy(true);
     setAITestResult(null);
     try {
       const payload = {
-        provider: aiForm.provider,
-        apiUrl: aiForm.apiUrl,
-        model: aiForm.model
+        provider: provider.provider,
+        apiUrl: provider.apiUrl,
+        model: provider.model
       };
-      if (String(aiForm.apiKey || '').trim()) {
-        payload.apiKey = aiForm.apiKey;
+      if (String(provider.apiKey || '').trim()) {
+        payload.apiKey = provider.apiKey;
       }
       const data = await api.aiTest(payload);
       setAITestResult({
@@ -893,12 +948,19 @@ function App() {
       .catch((err) => setError(err.message));
 
     loadChinaCities();
+    loadAIProviderPresets();
     api.stats().then(setStats).catch(() => {});
-  }, [refreshStatus, loadBrowser, loadStorageFolders, loadChinaCities]);
+  }, [refreshStatus, loadBrowser, loadStorageFolders, loadChinaCities, loadAIProviderPresets]);
 
   useEffect(() => {
     loadMaps();
   }, [loadMaps]);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      refreshAIUsage({ days: 7, limit: 100 });
+    }
+  }, [settingsOpen, refreshAIUsage]);
 
   useEffect(() => {
     loadFacets(filters.country || undefined);
@@ -956,11 +1018,6 @@ function App() {
     const timer = setTimeout(() => setMessage(''), 2800);
     return () => clearTimeout(timer);
   }, [message]);
-
-  useEffect(() => {
-    if (!settingsOpen || !String(aiForm.apiUrl || '').trim()) return;
-    fetchAIModels(false);
-  }, [settingsOpen, aiForm.apiUrl, aiForm.provider, fetchAIModels]);
 
   useEffect(() => {
     if (!error) return;
@@ -1366,13 +1423,17 @@ function App() {
           applyStorageSettings={applyStorageSettings}
           loadStorageFolders={loadStorageFolders} busy={busy} status={status}
           ocrStatus={ocrStatus} handleOcrReindex={handleOcrReindex}
-          aiForm={aiForm} setAIForm={setAIForm} aiModels={aiModels}
-          aiModelsBusy={aiModelsBusy} aiBusy={aiBusy}
+          aiProviders={aiProviders} activeProviderId={activeProviderId}
+          providerPresets={providerPresets} selectedProviderId={selectedProviderId}
+          setSelectedProviderId={setSelectedProviderId}
+          aiModels={aiModels} aiModelsBusy={aiModelsBusy} aiBusy={aiBusy}
           aiTestBusy={aiTestBusy} aiTestResult={aiTestResult}
-          saveAISettings={saveAISettings} fetchAIModels={fetchAIModels}
+          saveAIProvider={saveAIProvider} deleteAIProvider={deleteAIProvider}
+          activateAIProvider={activateAIProvider} fetchAIModels={fetchAIModels}
           testAIConnection={testAIConnection}
           handleAIExtract={handleAIExtract} handleBatchAIExtract={handleBatchAIExtract}
-          selectedMap={selectedMap} maps={maps} aiModelsKeyRef={aiModelsKeyRef}
+          selectedMap={selectedMap} maps={maps}
+          aiUsageData={aiUsageData} refreshAIUsage={refreshAIUsage}
           stats={stats}
         />
       ) : null}

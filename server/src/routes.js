@@ -56,6 +56,12 @@ import {
   buildChatEndpoint,
   PROVIDER_PRESETS
 } from './ai-service.js';
+import {
+  getProviderUsage,
+  getUsageStats,
+  getUsageSummary,
+  recordUsage
+} from './ai-usage.js';
 
 const router = express.Router();
 
@@ -120,6 +126,59 @@ const makeAIRecordContext = (record) => JSON.stringify({
   tags: record.tags,
   ocr_text: String(record.ocr_text || '').slice(0, 8000)
 }, null, 2);
+
+const getAIUsageProvider = ({ provider, apiUrl, model, providerId } = {}) => {
+  const configs = getAIProviderConfigs(false);
+  const configured = configs.providers.find((item) => item.id === providerId)
+    || configs.providers.find((item) => (
+      String(item.provider || '') === String(provider || '')
+      && String(item.apiUrl || '') === String(apiUrl || '')
+      && (!model || String(item.model || '') === String(model || ''))
+    ))
+    || configs.providers.find((item) => item.id === configs.activeId && !providerId);
+
+  return {
+    providerId: configured?.id || providerId || provider || 'unknown',
+    providerName: configured?.name || configured?.provider || provider || ''
+  };
+};
+
+const recordAIResult = ({ operation, provider, apiUrl, model, providerId, data, startTime }) => {
+  const usageProvider = getAIUsageProvider({ provider, apiUrl, model, providerId });
+  recordUsage({
+    ...usageProvider,
+    model: data?.model || model,
+    operation,
+    usage: data?.usage || null,
+    latencyMs: Date.now() - startTime,
+    status: 'success'
+  });
+};
+
+const recordAIError = ({ operation, provider, apiUrl, model, providerId, startTime, err }) => {
+  const usageProvider = getAIUsageProvider({ provider, apiUrl, model, providerId });
+  recordUsage({
+    ...usageProvider,
+    model,
+    operation,
+    usage: null,
+    latencyMs: Date.now() - startTime,
+    status: 'error',
+    errorMessage: err?.message || String(err)
+  });
+};
+
+const trackedChatCompletion = async ({ operation, provider, apiUrl, apiKey, model, messages, options, providerId }) => {
+  const startTime = Date.now();
+  try {
+    const data = await chatCompletion({ provider, apiUrl, apiKey, model, messages, options });
+    recordAIResult({ operation, provider, apiUrl, model, providerId, data, startTime });
+    return data;
+  } catch (err) {
+    recordAIError({ operation, provider, apiUrl, model, providerId, startTime, err });
+    throw err;
+  }
+};
 
 const makeAIPrompt = (record) => `请基于图片、OCR 和已有元数据提取历史地图编目信息，并严格返回单个 JSON 对象。
 
@@ -784,6 +843,33 @@ router.post('/ai/provider-configs/:id/activate', (req, res) => {
   }
 });
 
+router.get('/ai/usage', (req, res) => {
+  const days = normalizeNumber(req.query.days, 7);
+  const limit = normalizeNumber(req.query.limit, 100);
+  const providerId = String(req.query.providerId || '').trim();
+  res.json({
+    ok: true,
+    items: getUsageStats({ providerId: providerId || undefined, days, limit })
+  });
+});
+
+router.get('/ai/usage/summary', (req, res) => {
+  const days = normalizeNumber(req.query.days, 7);
+  res.json({
+    ok: true,
+    ...getUsageSummary({ days })
+  });
+});
+
+router.get('/ai/usage/providers', (req, res) => {
+  const days = normalizeNumber(req.query.days, 7);
+  const providers = getAIProviderConfigs(false).providers.map((provider) => ({
+    ...provider,
+    usage: getProviderUsage(provider.id, days)
+  }));
+  res.json({ ok: true, providers });
+});
+
 router.post('/ai/models', async (req, res) => {
   try {
     const saved = getAISettings(true);
@@ -826,13 +912,20 @@ router.post('/ai/chat', async (req, res) => {
     }
 
     if (stream) {
-      const result = await chatCompletionStream({
-        provider, apiUrl, apiKey, model, messages,
-        options: {
-          maxTokens: body.maxTokens,
-          temperature: body.temperature
-        }
-      });
+      const startTime = Date.now();
+      let result;
+      try {
+        result = await chatCompletionStream({
+          provider, apiUrl, apiKey, model, messages,
+          options: {
+            maxTokens: body.maxTokens,
+            temperature: body.temperature
+          }
+        });
+      } catch (err) {
+        recordAIError({ operation: 'chat', provider, apiUrl, model, startTime, err });
+        throw err;
+      }
 
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -844,14 +937,17 @@ router.post('/ai/chat', async (req, res) => {
         res.write(chunk);
       });
       reader.on('end', () => {
+        recordAIResult({ operation: 'chat', provider, apiUrl, model, data: { model, usage: null }, startTime });
         res.end();
       });
       reader.on('error', (err) => {
         logger.error({ err }, 'AI stream error');
+        recordAIError({ operation: 'chat', provider, apiUrl, model, startTime, err });
         res.end();
       });
     } else {
-      const data = await chatCompletion({
+      const data = await trackedChatCompletion({
+        operation: 'chat',
         provider, apiUrl, apiKey, model, messages,
         options: {
           maxTokens: body.maxTokens,
@@ -894,7 +990,8 @@ router.post('/ai/maps/:id/extract', async (req, res) => {
       { role: 'user', content }
     ];
 
-    const data = await chatCompletion({
+    const data = await trackedChatCompletion({
+      operation: 'extract',
       provider: settings.provider,
       apiUrl: settings.apiUrl,
       apiKey: settings.apiKey,
@@ -955,7 +1052,8 @@ router.post('/ai/maps/batch-extract', async (req, res) => {
           { role: 'user', content }
         ];
 
-        const data = await chatCompletion({
+        const data = await trackedChatCompletion({
+          operation: 'batch-extract',
           provider: settings.provider,
           apiUrl: settings.apiUrl,
           apiKey: settings.apiKey,
@@ -1013,7 +1111,14 @@ router.post('/ai/maps/batch-extract-async', async (req, res) => {
           { role: 'system', content: settings.systemPrompt || AI_SYSTEM_PROMPT },
           { role: 'user', content }
         ];
-        const data = await chatCompletion({ provider: settings.provider, apiUrl: settings.apiUrl, apiKey: settings.apiKey, model: settings.model, messages });
+        const data = await trackedChatCompletion({
+          operation: 'batch-extract-async',
+          provider: settings.provider,
+          apiUrl: settings.apiUrl,
+          apiKey: settings.apiKey,
+          model: settings.model,
+          messages
+        });
         const parsed = parseAIJson(extractContent(data));
         const updated = await persistAIMapMeta(id, parsed);
         task.results.push({ id, title: updated.title || current.file_name });
@@ -1054,7 +1159,8 @@ router.post('/ai/test', async (req, res) => {
     const model = String(body.model || settings.model || '').trim();
 
     const startTime = Date.now();
-    const data = await chatCompletion({
+    const data = await trackedChatCompletion({
+      operation: 'test',
       provider, apiUrl, apiKey, model,
       messages: [
         { role: 'user', content: '请回复 "OK"，不要输出其他内容。' }
@@ -1794,7 +1900,8 @@ router.get('/discover/recommendation', async (req, res) => {
       { role: 'user', content: userMsg }
     ];
 
-    const data = await chatCompletion({
+    const data = await trackedChatCompletion({
+      operation: 'discover',
       provider: settings.provider, apiUrl: settings.apiUrl,
       apiKey: settings.apiKey, model: settings.model,
       messages, options: { maxTokens: 150 }
@@ -1861,7 +1968,15 @@ router.post('/rss/generate', (req, res) => {
             } catch (_) {}
           }
           const messages = [{ role: 'user', content }];
-          const data = await chatCompletion({ provider: settings.provider, apiUrl: settings.apiUrl, apiKey: settings.apiKey, model: settings.model, messages, options: { maxTokens: 100 } });
+          const data = await trackedChatCompletion({
+            operation: 'ocr-describe',
+            provider: settings.provider,
+            apiUrl: settings.apiUrl,
+            apiKey: settings.apiKey,
+            model: settings.model,
+            messages,
+            options: { maxTokens: 100 }
+          });
           const desc = extractContent(data).trim();
           task.results.push({ id: item.id, title: item.title || item.file_name, description: desc });
         } else {
