@@ -55,6 +55,9 @@ final class AIProgressCenter {
     self.progress = 1
     detailLines.append(message)
     notify()
+    DispatchQueue.main.async {
+      SwiftUIBridge.showToast(.success, message: message, duration: 2.5)
+    }
   }
 
   func fail(message: String) {
@@ -63,6 +66,9 @@ final class AIProgressCenter {
     self.progress = 0
     detailLines.append(message)
     notify()
+    DispatchQueue.main.async {
+      SwiftUIBridge.showToast(.error, message: message, duration: 3.0)
+    }
   }
 
   private func notify() {

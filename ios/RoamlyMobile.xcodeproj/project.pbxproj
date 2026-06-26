@@ -3,29 +3,37 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		021048C39D925E7A98E3A00F /* OrganizeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E022B7981B1D6581D6A85547 /* OrganizeViewController.swift */; };
+		0352A55E24867297CF3AF910 /* SWViewExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA2D6525948324AC82BE50C /* SWViewExtension.swift */; };
 		0E66E5B9114D9856ECC41586 /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 965584FE764B7A9B1443C08D /* SettingsViewController.swift */; };
 		116915AB60C6D8AFEF06A529 /* country-region-data.json in Resources */ = {isa = PBXBuildFile; fileRef = 4F8437BA066AEB55B61A4713 /* country-region-data.json */; };
 		1D1C367FAB7D37719E4C59B2 /* BackupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F299BC742467666736316081 /* BackupViewController.swift */; };
 		2BF0F3BA97D1DC7B52F38AF2 /* OCRIndexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EFB6338513DA1ECA0F15D8 /* OCRIndexService.swift */; };
+		4864767586093CAC6F73B65C /* SWDateExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1A733877D1DC4CDE0E8F8A /* SWDateExtension.swift */; };
+		4E60A1B3E461F526712CD446 /* SwiftUIBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EFBE84880A28D6ECB6FFBB /* SwiftUIBridge.swift */; };
 		4FA7127514EF123E107CB98A /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 503567727D97B7F2A168563E /* AppContainer.swift */; };
-		59F6C3F0B66B4B8890BCF11D /* AdministrativeBoundaryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B59BE205274E30A454EB27 /* AdministrativeBoundaryStore.swift */; };
+		531F1BB9C220667D2306D85F /* AdministrativeBoundaryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620E43697FB2A6C2AAE5355C /* AdministrativeBoundaryStore.swift */; };
+		582AA2ED5FC117531FC3AA0F /* SWAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA777C92BF7376E7DD6749B /* SWAlert.swift */; };
+		5B28E78E53F8A690CDE45B66 /* admin-boundaries-cn.json in Resources */ = {isa = PBXBuildFile; fileRef = 9D524A7440FAF097078C791C /* admin-boundaries-cn.json */; };
+		634F02BC7B1077CF8853329A /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70EB28771B0D7B31DE93C7CD /* AboutView.swift */; };
 		6A8A0741748B395D1034DA79 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D48DBE6B0B0A55169CA6AB /* SceneDelegate.swift */; };
 		6B5D9D57DA8D27851FE1B289 /* RegionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1831224C7D6E16F1EA24D5C /* RegionCatalog.swift */; };
 		6F33E1CDFA59C33FE18B12C5 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40533C814E4FC644D51291B3 /* AppDelegate.swift */; };
-		70B18D5512F442D89D636783 /* admin-boundaries-cn.json in Resources */ = {isa = PBXBuildFile; fileRef = 1974D4EE28DF48FCA96C34CF /* admin-boundaries-cn.json */; };
 		75CD83394F42DA6CDF4E8DC5 /* china-city.json in Resources */ = {isa = PBXBuildFile; fileRef = 64D80E08401E100AD86C6A83 /* china-city.json */; };
 		7CBAEC9BE1782DB36AF6ECC3 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEFA14059C39B57F9BDE5D65 /* APIClient.swift */; };
 		8D11F4E82578CCA3352975BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A5EB0A3C3E099EB35BF6B2C /* Assets.xcassets */; };
 		91241BFEF91331333A9F016F /* china-area.json in Resources */ = {isa = PBXBuildFile; fileRef = DFCF9B2CADAD111D3B35E096 /* china-area.json */; };
 		91CBC915D2915F461B6A1227 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F8AD01CE2AC899D2B57093 /* AppSettings.swift */; };
+		9440088C63A177CC9A8B22E0 /* SWDotSphere.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8418986A037A353E5633CD50 /* SWDotSphere.swift */; };
 		A2A8FE0F2CCF282A32BED248 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6637ECA6E93EF8728A6587A9 /* SyncService.swift */; };
 		A75C7C003B5B525AB65DE532 /* LocalLibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01791CFB460196E0DE852FE5 /* LocalLibraryStore.swift */; };
 		A9BDEE9A683BD88C004F43EF /* MapDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268371BBF8AEB3F832B44DC6 /* MapDetailViewController.swift */; };
+		A9EBA3C7852545882F604359 /* SWLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = C995861752BFB0FAAE981361 /* SWLoading.swift */; };
+		B15056F6D8E1BD208F9376FE /* SWOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D9DCB87B9C3EF23DE7B8E84 /* SWOnboardingView.swift */; };
 		BDE5BAF17DA70873F6DD06F2 /* MapRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8032DA8F795AE9D472C4925 /* MapRecord.swift */; };
 		CA30E2371AC2DFB7A1566910 /* AIMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE249272939164F7D66E650 /* AIMetadataService.swift */; };
 		CEA902824E1880ED21942976 /* RootTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2FFBBB4471E9E0223AC9FDA /* RootTabBarController.swift */; };
@@ -40,26 +48,34 @@
 /* Begin PBXFileReference section */
 		01791CFB460196E0DE852FE5 /* LocalLibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLibraryStore.swift; sourceTree = "<group>"; };
 		028819D6261EE1D9FF8CB599 /* SelectionListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionListViewController.swift; sourceTree = "<group>"; };
-		10B59BE205274E30A454EB27 /* AdministrativeBoundaryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdministrativeBoundaryStore.swift; sourceTree = "<group>"; };
-		1974D4EE28DF48FCA96C34CF /* admin-boundaries-cn.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "admin-boundaries-cn.json"; sourceTree = "<group>"; };
+		0A1A733877D1DC4CDE0E8F8A /* SWDateExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SWDateExtension.swift; sourceTree = "<group>"; };
+		0AA2D6525948324AC82BE50C /* SWViewExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SWViewExtension.swift; sourceTree = "<group>"; };
+		0BA777C92BF7376E7DD6749B /* SWAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SWAlert.swift; sourceTree = "<group>"; };
 		268371BBF8AEB3F832B44DC6 /* MapDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapDetailViewController.swift; sourceTree = "<group>"; };
 		3D9F9040F7028B7930E333E5 /* MapWorkbenchViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapWorkbenchViewController.swift; sourceTree = "<group>"; };
 		40533C814E4FC644D51291B3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4A5EB0A3C3E099EB35BF6B2C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4D9DCB87B9C3EF23DE7B8E84 /* SWOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SWOnboardingView.swift; sourceTree = "<group>"; };
 		4F8437BA066AEB55B61A4713 /* country-region-data.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "country-region-data.json"; sourceTree = "<group>"; };
 		503567727D97B7F2A168563E /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
-		61A409D428DCD96617433723 /* RoamlyMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoamlyMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		61A409D428DCD96617433723 /* RoamlyMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoamlyMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		620E43697FB2A6C2AAE5355C /* AdministrativeBoundaryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdministrativeBoundaryStore.swift; sourceTree = "<group>"; };
 		64D80E08401E100AD86C6A83 /* china-city.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "china-city.json"; sourceTree = "<group>"; };
 		6637ECA6E93EF8728A6587A9 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
+		70EB28771B0D7B31DE93C7CD /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		74EFBE84880A28D6ECB6FFBB /* SwiftUIBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIBridge.swift; sourceTree = "<group>"; };
+		8418986A037A353E5633CD50 /* SWDotSphere.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SWDotSphere.swift; sourceTree = "<group>"; };
 		89D48DBE6B0B0A55169CA6AB /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		8EE249272939164F7D66E650 /* AIMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIMetadataService.swift; sourceTree = "<group>"; };
 		965584FE764B7A9B1443C08D /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		9D524A7440FAF097078C791C /* admin-boundaries-cn.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "admin-boundaries-cn.json"; sourceTree = "<group>"; };
 		A1831224C7D6E16F1EA24D5C /* RegionCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionCatalog.swift; sourceTree = "<group>"; };
 		A8032DA8F795AE9D472C4925 /* MapRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapRecord.swift; sourceTree = "<group>"; };
 		B1F8AD01CE2AC899D2B57093 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		BEE01C5A18D13678494C5F5B /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		C1EFB6338513DA1ECA0F15D8 /* OCRIndexService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRIndexService.swift; sourceTree = "<group>"; };
 		C881DF5B6F69A70C32F46AC6 /* china-province.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "china-province.json"; sourceTree = "<group>"; };
+		C995861752BFB0FAAE981361 /* SWLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SWLoading.swift; sourceTree = "<group>"; };
 		CEFA14059C39B57F9BDE5D65 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		DFCF9B2CADAD111D3B35E096 /* china-area.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "china-area.json"; sourceTree = "<group>"; };
 		E022B7981B1D6581D6A85547 /* OrganizeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizeViewController.swift; sourceTree = "<group>"; };
@@ -74,7 +90,7 @@
 		108E923ACA4B715F1445C107 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				10B59BE205274E30A454EB27 /* AdministrativeBoundaryStore.swift */,
+				620E43697FB2A6C2AAE5355C /* AdministrativeBoundaryStore.swift */,
 				8EE249272939164F7D66E650 /* AIMetadataService.swift */,
 				CEFA14059C39B57F9BDE5D65 /* APIClient.swift */,
 				503567727D97B7F2A168563E /* AppContainer.swift */,
@@ -88,12 +104,31 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		1CA989850345C7DEEDF5010C /* SWAnimation */ = {
+			isa = PBXGroup;
+			children = (
+				8418986A037A353E5633CD50 /* SWDotSphere.swift */,
+			);
+			path = SWAnimation;
+			sourceTree = "<group>";
+		};
 		1D8CA0F2EA46CA910C03CC60 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				61A409D428DCD96617433723 /* RoamlyMobile.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		432D8A857DF0EC448701E1C2 /* ShipSwift */ = {
+			isa = PBXGroup;
+			children = (
+				74EFBE84880A28D6ECB6FFBB /* SwiftUIBridge.swift */,
+				1CA989850345C7DEEDF5010C /* SWAnimation */,
+				C9E276C71CB6FD1DF45C7ADA /* SWComponent */,
+				4E76CB3FA4AA3EE9C325FBB7 /* SWUtil */,
+			);
+			path = ShipSwift;
 			sourceTree = "<group>";
 		};
 		44F9F3739864EBB757E111A8 /* Sources */ = {
@@ -104,9 +139,28 @@
 				AA39412844DF8BE983D6A0D6 /* Models */,
 				BF01DC8EF5EFA9BF1DE8AF69 /* Resources */,
 				108E923ACA4B715F1445C107 /* Services */,
+				432D8A857DF0EC448701E1C2 /* ShipSwift */,
 				694659CFCF7AD6BEE99541A6 /* Support */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		4E76CB3FA4AA3EE9C325FBB7 /* SWUtil */ = {
+			isa = PBXGroup;
+			children = (
+				0A1A733877D1DC4CDE0E8F8A /* SWDateExtension.swift */,
+				0AA2D6525948324AC82BE50C /* SWViewExtension.swift */,
+			);
+			path = SWUtil;
+			sourceTree = "<group>";
+		};
+		54CAD722C826D786E0EA44BB /* Display */ = {
+			isa = PBXGroup;
+			children = (
+				70EB28771B0D7B31DE93C7CD /* AboutView.swift */,
+				4D9DCB87B9C3EF23DE7B8E84 /* SWOnboardingView.swift */,
+			);
+			path = Display;
 			sourceTree = "<group>";
 		};
 		66A9341DFA2D336D7ACF2F36 /* Shared */ = {
@@ -184,7 +238,7 @@
 		BF01DC8EF5EFA9BF1DE8AF69 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				1974D4EE28DF48FCA96C34CF /* admin-boundaries-cn.json */,
+				9D524A7440FAF097078C791C /* admin-boundaries-cn.json */,
 				DFCF9B2CADAD111D3B35E096 /* china-area.json */,
 				64D80E08401E100AD86C6A83 /* china-city.json */,
 				C881DF5B6F69A70C32F46AC6 /* china-province.json */,
@@ -209,6 +263,24 @@
 				89D48DBE6B0B0A55169CA6AB /* SceneDelegate.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		C9E276C71CB6FD1DF45C7ADA /* SWComponent */ = {
+			isa = PBXGroup;
+			children = (
+				54CAD722C826D786E0EA44BB /* Display */,
+				D4CD45610B25255F07A34C6F /* Feedback */,
+			);
+			path = SWComponent;
+			sourceTree = "<group>";
+		};
+		D4CD45610B25255F07A34C6F /* Feedback */ = {
+			isa = PBXGroup;
+			children = (
+				0BA777C92BF7376E7DD6749B /* SWAlert.swift */,
+				C995861752BFB0FAAE981361 /* SWLoading.swift */,
+			);
+			path = Feedback;
 			sourceTree = "<group>";
 		};
 		E8681E63E496D3EC949712A0 /* Organize */ = {
@@ -267,6 +339,7 @@
 			);
 			mainGroup = BFEE825073C5F833E04B6D14;
 			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -281,7 +354,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D11F4E82578CCA3352975BF /* Assets.xcassets in Resources */,
-				70B18D5512F442D89D636783 /* admin-boundaries-cn.json in Resources */,
+				5B28E78E53F8A690CDE45B66 /* admin-boundaries-cn.json in Resources */,
 				91241BFEF91331333A9F016F /* china-area.json in Resources */,
 				75CD83394F42DA6CDF4E8DC5 /* china-city.json in Resources */,
 				EC1782CA99680B9513ADAA74 /* china-province.json in Resources */,
@@ -296,9 +369,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				59F6C3F0B66B4B8890BCF11D /* AdministrativeBoundaryStore.swift in Sources */,
 				CA30E2371AC2DFB7A1566910 /* AIMetadataService.swift in Sources */,
 				7CBAEC9BE1782DB36AF6ECC3 /* APIClient.swift in Sources */,
+				634F02BC7B1077CF8853329A /* AboutView.swift in Sources */,
+				531F1BB9C220667D2306D85F /* AdministrativeBoundaryStore.swift in Sources */,
 				4FA7127514EF123E107CB98A /* AppContainer.swift in Sources */,
 				6F33E1CDFA59C33FE18B12C5 /* AppDelegate.swift in Sources */,
 				91CBC915D2915F461B6A1227 /* AppSettings.swift in Sources */,
@@ -314,9 +388,16 @@
 				6B5D9D57DA8D27851FE1B289 /* RegionCatalog.swift in Sources */,
 				FEBC30D9312F5F518AD595EE /* RegionPickerSheetViewController.swift in Sources */,
 				CEA902824E1880ED21942976 /* RootTabBarController.swift in Sources */,
+				582AA2ED5FC117531FC3AA0F /* SWAlert.swift in Sources */,
+				4864767586093CAC6F73B65C /* SWDateExtension.swift in Sources */,
+				9440088C63A177CC9A8B22E0 /* SWDotSphere.swift in Sources */,
+				A9EBA3C7852545882F604359 /* SWLoading.swift in Sources */,
+				B15056F6D8E1BD208F9376FE /* SWOnboardingView.swift in Sources */,
+				0352A55E24867297CF3AF910 /* SWViewExtension.swift in Sources */,
 				6A8A0741748B395D1034DA79 /* SceneDelegate.swift in Sources */,
 				FC9337C7CCE180758466D94A /* SelectionListViewController.swift in Sources */,
 				0E66E5B9114D9856ECC41586 /* SettingsViewController.swift in Sources */,
+				4E60A1B3E461F526712CD446 /* SwiftUIBridge.swift in Sources */,
 				A2A8FE0F2CCF282A32BED248 /* SyncService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -330,7 +411,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = M6WQA48PJ2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Support/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -414,7 +494,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = M6WQA48PJ2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Support/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;

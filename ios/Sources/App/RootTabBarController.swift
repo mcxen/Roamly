@@ -37,6 +37,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     navigationControllers.forEach { $0.delegate = self }
     configureSystemBars()
     configureAIProgressView()
+    configureToastOverlay()
     updateAIProgressView(animated: false)
     NotificationCenter.default.addObserver(
       self,
@@ -203,5 +204,11 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
 
   func navigationController(_ navigationController: UINavigationController, didShow viewController: UIViewController, animated: Bool) {
     updateAIProgressView(animated: true)
+  }
+
+  // MARK: - ShipSwift Toast Overlay
+
+  private func configureToastOverlay() {
+    SwiftUIBridge.attachToastOverlay(to: self)
   }
 }

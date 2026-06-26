@@ -282,5 +282,37 @@ export const api = {
   },
   async discoverRecommendation() {
     return handle(await fetch('/api/discover/recommendation'));
-  }
+  },
+
+  /* GeoJSON */
+  async exportGeoJSON(options = {}) {
+    const params = new URLSearchParams();
+    if (options.hasCoords) params.set('hasCoords', '1');
+    if (options.country) params.set('country', options.country);
+    if (options.limit) params.set('limit', String(options.limit));
+    const query = params.toString();
+    const res = await fetch(`/api/maps/geojson${query ? `?${query}` : ''}`);
+    return res.json();
+  },
+
+  async importGeoJSON(geojson) {
+    return handle(await fetch('/api/maps/geojson/import', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(geojson),
+    }));
+  },
+
+  /* EXIF */
+  async extractExif(id) {
+    return handle(await fetch(`/api/maps/extract-exif/${id}`, { method: 'POST' }));
+  },
+
+  async extractExifBatch(limit = 100) {
+    return handle(await fetch('/api/maps/extract-exif-batch', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ limit }),
+    }));
+  },
 };

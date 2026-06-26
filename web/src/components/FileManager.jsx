@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Upload, FolderOpen, RefreshCw, Server, FileText, Bot, CheckCircle2, Loader2, Image, BarChart3, Sparkles } from 'lucide-react';
+import { Upload, FolderOpen, RefreshCw, Server, FileText, Bot, CheckCircle2, Loader2, Image, BarChart3, Sparkles, Camera, FileJson } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Input } from './ui/input';
@@ -163,6 +163,47 @@ export default function FileManager({
               <p className="tw-text-sm tw-font-semibold tw-tracking-[0.1em] tw-text-[#213449]">{uploadFiles.length ? `已选择 ${uploadFiles.length} 个文件` : '拖入或选择地图文件'}</p>
               <p className="tw-mt-1 tw-text-[11px] tw-text-[#6f6758]">采用档案接收台式布局，先入库，再补元数据。</p>
               <input type="file" accept="image/*" multiple className="tw-mt-3 tw-text-xs tw-file:mr-2 tw-file:rounded-md tw-file:border-0 tw-file:bg-[#213449] tw-file:px-2.5 tw-file:py-1 tw-file:text-xs tw-file:text-[#fbf6ea] tw-cursor-pointer" onChange={(e) => setUploadFiles(Array.from(e.target.files || []))} />
+              <div className="tw-mt-3 tw-flex tw-items-center tw-justify-center tw-gap-3 tw-flex-wrap">
+                <label className="tw-inline-flex tw-cursor-pointer tw-items-center tw-gap-1.5 tw-rounded-lg tw-border tw-border-[var(--kumo-brand)] tw-bg-[var(--kumo-brand)] tw-px-3 tw-py-1.5 tw-text-xs tw-font-semibold tw-text-[var(--kumo-brand-text)] tw-shadow-[var(--kumo-shadow-sm)] tw-transition-colors hover:tw-bg-[var(--kumo-brand-hover)]">
+                  <Camera className="tw-size-3.5" />
+                  拍照导入
+                  <input type="file" accept="image/*" capture="environment" className="tw-hidden" onChange={(e) => setUploadFiles(Array.from(e.target.files || []))} />
+                </label>
+                <label className="tw-inline-flex tw-cursor-pointer tw-items-center tw-gap-1.5 tw-rounded-lg tw-border tw-border-[var(--kumo-control-border)] tw-bg-[var(--kumo-control-bg)] tw-px-3 tw-py-1.5 tw-text-xs tw-font-semibold tw-text-[var(--kumo-control-text)] tw-shadow-[var(--kumo-shadow-sm)] tw-transition-colors hover:tw-bg-[var(--kumo-control-bg-hover)]">
+                  <FileJson className="tw-size-3.5" />
+                  导入 GeoJSON
+                  <input type="file" accept=".geojson,.json,application/geo+json,application/json" className="tw-hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const text = await file.text();
+                      const geojson = JSON.parse(text);
+                      const result = await api.importGeoJSON(geojson);
+                      setMessage?.(`导入成功: ${result.imported} 条记录`);
+                      handleScan?.();
+                    } catch (err) {
+                      setError?.(err.message);
+                    }
+                  }} />
+                </label>
+                <Button size="xs" variant="secondary" onClick={async () => {
+                  try {
+                    const geojson = await api.exportGeoJSON({ hasCoords: true, limit: 5000 });
+                    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `roamly-geo-export-${new Date().toISOString().slice(0, 10)}.geojson`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    setMessage?.(`已导出 ${geojson.features?.length || 0} 个要素`);
+                  } catch (err) {
+                    setError?.(err.message);
+                  }
+                }}>
+                  <FileJson className="tw-size-3" /> 导出 GeoJSON
+                </Button>
+              </div>
             </div>
             {uploading && (
               <div className="tw-space-y-1">

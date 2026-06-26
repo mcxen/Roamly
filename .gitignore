@@ -4,3 +4,6 @@ node_modules
 server/data
 web/dist
 .DS_Store
+.hermes/
+__pycache__/
+*.pyc

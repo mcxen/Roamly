@@ -1,0 +1,167 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   KUMO-STYLE SEMANTIC DESIGN TOKENS
+   Inspired by @cloudflare/kumo — adapted for Roamly's parchment theme
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Surface hierarchy ── */
+  --kumo-base: #fbf6ea;
+  --kumo-elevated: #fefdf8;
+  --kumo-recessed: #efe3c7;
+
+  /* ── Text hierarchy ── */
+  --kumo-default: #213449;
+  --kumo-subtle: #544c42;
+  --kumo-muted: #655f55;
+
+  /* ── Brand / Accent ── */
+  --kumo-brand: #8f3f28;
+  --kumo-brand-hover: #7d3421;
+  --kumo-brand-text: #fbf6ea;
+
+  /* ── Semantic / Status ── */
+  --kumo-danger: #a33f26;
+  --kumo-success: #3f6a4d;
+  --kumo-info: #2d7db6;
+  --kumo-warning: #c8a44f;
+
+  /* ── Border tokens ── */
+  --kumo-line: #bfae90;
+  --kumo-hairline: rgba(123, 106, 82, 0.24);
+  --kumo-focus: rgba(143, 63, 40, 0.4);
+
+  /* ── Interactive states ── */
+  --kumo-tint: #ead6a0;
+  --kumo-tint-hover: #dfc98d;
+  --kumo-tint-active: #d4bc74;
+
+  /* ── Control tokens ── */
+  --kumo-control-bg: #fbf6ea;
+  --kumo-control-bg-hover: #f3e7c7;
+  --kumo-control-bg-active: #ead6a0;
+  --kumo-control-border: #8b7a60;
+  --kumo-control-text: #213449;
+  --kumo-control-radius: 10px;
+
+  /* ── Shadow tokens ── */
+  --kumo-shadow-sm: 0 2px 0 rgba(116, 91, 54, 0.16);
+  --kumo-shadow-md: 0 10px 24px rgba(77, 56, 24, 0.08);
+  --kumo-shadow-lg: 0 18px 34px rgba(77, 56, 24, 0.16);
+  --kumo-shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.18);
+
+  /* ── Panel / Card ── */
+  --kumo-panel-bg: #fbf6ea;
+  --kumo-panel-border: #bfae90;
+  --kumo-panel-shadow: 0 12px 30px rgba(77, 56, 24, 0.1), inset 0 0 0 1px rgba(245, 235, 211, 0.72);
+
+  /* ── Typography ── */
+  --kumo-font-body: 'IBM Plex Sans JP', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+  --kumo-font-display: 'Noto Serif JP', 'Songti SC', serif;
+
+  /* ── Spacing / Size ── */
+  --kumo-control-pad-y: 8px;
+  --kumo-control-pad-x: 11px;
+  --kumo-control-font: 11px;
+
+  /* ── Transition ── */
+  --kumo-transition: 0.15s ease;
+
+  /* ── Backdrop ── */
+  --kumo-backdrop: rgba(0, 0, 0, 0.5);
+
+  /* ── Resizer ── */
+  --kumo-resizer: #d6c8ae;
+  --kumo-resizer-active: #8f3f28;
+}
+
+/* ── Utility classes using semantic tokens ── */
+
+.kumo-surface-base {
+  background: var(--kumo-base);
+  color: var(--kumo-default);
+}
+
+.kumo-surface-elevated {
+  background: var(--kumo-elevated);
+  color: var(--kumo-default);
+}
+
+.kumo-surface-recessed {
+  background: var(--kumo-recessed);
+  color: var(--kumo-default);
+}
+
+/* ── Scrollbar styling ── */
+.kumo-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.kumo-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kumo-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--kumo-line);
+  border-radius: 3px;
+}
+
+.kumo-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--kumo-muted);
+}
+
+/* ── Focus visible utility ── */
+.kumo-focus {
+  outline: none;
+}
+
+.kumo-focus:focus-visible {
+  box-shadow: 0 0 0 2px var(--kumo-focus);
+}
+
+/* ── Animations ── */
+@keyframes kumo-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes kumo-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes kumo-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes kumo-scale-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+@keyframes kumo-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes kumo-slide-down {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@keyframes kumo-spin {
+  to { transform: rotate(360deg); }
+}
+
+.kumo-animate-fade-in {
+  animation: kumo-fade-in 0.2s ease;
+}
+
+.kumo-animate-scale-in {
+  animation: kumo-scale-in 0.2s ease;
+}
+
+.kumo-animate-spin {
+  animation: kumo-spin 0.8s linear infinite;
+}

@@ -1414,29 +1414,28 @@ function App() {
         />
       )}
 
-      {settingsOpen ? (
-        <SettingsDialog
-          onClose={() => setSettingsOpen(false)}
-          uiSettings={uiSettings} setUiSettings={setUiSettings}
-          storageForm={storageForm} setStorageForm={setStorageForm}
-          browserState={browserState} loadBrowser={loadBrowser}
-          applyStorageSettings={applyStorageSettings}
-          loadStorageFolders={loadStorageFolders} busy={busy} status={status}
-          ocrStatus={ocrStatus} handleOcrReindex={handleOcrReindex}
-          aiProviders={aiProviders} activeProviderId={activeProviderId}
-          providerPresets={providerPresets} selectedProviderId={selectedProviderId}
-          setSelectedProviderId={setSelectedProviderId}
-          aiModels={aiModels} aiModelsBusy={aiModelsBusy} aiBusy={aiBusy}
-          aiTestBusy={aiTestBusy} aiTestResult={aiTestResult}
-          saveAIProvider={saveAIProvider} deleteAIProvider={deleteAIProvider}
-          activateAIProvider={activateAIProvider} fetchAIModels={fetchAIModels}
-          testAIConnection={testAIConnection}
-          handleAIExtract={handleAIExtract} handleBatchAIExtract={handleBatchAIExtract}
-          selectedMap={selectedMap} maps={maps}
-          aiUsageData={aiUsageData} refreshAIUsage={refreshAIUsage}
-          stats={stats}
-        />
-      ) : null}
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        uiSettings={uiSettings} setUiSettings={setUiSettings}
+        storageForm={storageForm} setStorageForm={setStorageForm}
+        browserState={browserState} loadBrowser={loadBrowser}
+        applyStorageSettings={applyStorageSettings}
+        loadStorageFolders={loadStorageFolders} busy={busy} status={status}
+        ocrStatus={ocrStatus} handleOcrReindex={handleOcrReindex}
+        aiProviders={aiProviders} activeProviderId={activeProviderId}
+        providerPresets={providerPresets} selectedProviderId={selectedProviderId}
+        setSelectedProviderId={setSelectedProviderId}
+        aiModels={aiModels} aiModelsBusy={aiModelsBusy} aiBusy={aiBusy}
+        aiTestBusy={aiTestBusy} aiTestResult={aiTestResult}
+        saveAIProvider={saveAIProvider} deleteAIProvider={deleteAIProvider}
+        activateAIProvider={activateAIProvider} fetchAIModels={fetchAIModels}
+        testAIConnection={testAIConnection}
+        handleAIExtract={handleAIExtract} handleBatchAIExtract={handleBatchAIExtract}
+        selectedMap={selectedMap} maps={maps}
+        aiUsageData={aiUsageData} refreshAIUsage={refreshAIUsage}
+        stats={stats}
+      />
 
       {viewerOpen && selectedMap ? (
         <ImageViewer

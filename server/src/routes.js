@@ -45,6 +45,7 @@ import {
 } from './runtime-settings.js';
 import { restartWatcher, stopWatcher } from './watcher.js';
 import { getOcrStatus, queueOcrForCandidates } from './ocr.js';
+import { extractGeoFromUpload, reExtractExif } from './exif.js';
 import { forceReloadProjectMeta, getProjectStoreStatus, upsertProjectMeta } from './project-store.js';
 import {
   chatCompletion,
@@ -1767,13 +1768,66 @@ router.post('/maps/upload', upload.array('files', 300), async (req, res) => {
 
     const folder = req.body?.folder || '';
     const savedPaths = [];
+    const exifResults = [];
 
     for (const file of files) {
+      // Extract EXIF GPS before moving the temp file
+      const exifGeo = await extractGeoFromUpload(file.path);
       const savedPath = await saveUploadToStorage({ file, folder });
       savedPaths.push(savedPath);
+      if (exifGeo.hasExif) {
+        exifResults.push({ path: savedPath, ...exifGeo });
+      }
     }
 
     const scan = await scanLibrary();
+
+    // Auto-populate coordinates from EXIF if no manual coords provided
+    if (exifResults.length > 0) {
+      const hasManualCoords = req.body?.latitude !== undefined || req.body?.longitude !== undefined;
+      if (!hasManualCoords) {
+        // Merge EXIF coordinates per file
+        for (const exif of exifResults) {
+          try {
+            const row = dbInstance.prepare('SELECT * FROM maps WHERE file_path = ?').get(exif.path);
+            if (row && (row.latitude == null || row.longitude == null)) {
+              statements.updateMapMeta.run({
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                tags: row.tags,
+                collection_unit: row.collection_unit,
+                scope_level: row.scope_level,
+                country_code: row.country_code,
+                country_name: row.country_name,
+                province: row.province,
+                related_countries: row.related_countries,
+                related_provinces: row.related_provinces,
+                city: row.city,
+                district: row.district,
+                latitude: exif.latitude,
+                longitude: exif.longitude,
+                north_latitude: row.north_latitude,
+                south_latitude: row.south_latitude,
+                east_longitude: row.east_longitude,
+                west_longitude: row.west_longitude,
+                coverage_outline: row.coverage_outline,
+                year_label: row.year_label,
+                campaign: row.campaign,
+                teaching_use: row.teaching_use,
+                teaching_note: row.teaching_note,
+                security_level: row.security_level,
+                storage_band: row.storage_band,
+                updated_at: new Date().toISOString(),
+              });
+            }
+          } catch (e) {
+            logger.warn({ err: e, path: exif.path }, 'Failed to apply EXIF coordinates to map record');
+          }
+        }
+      }
+    }
+
     const touched = await applyBatchMetaToRows(savedPaths, req.body || {});
     const prewarm = await prewarmOptimizedImages(touched, { limit: 120, max: 720, quality: 72 });
     queueOcrForCandidates({ force: false, limit: 800 });
@@ -1784,7 +1838,8 @@ router.post('/maps/upload', upload.array('files', 300), async (req, res) => {
       scan,
       prewarm,
       updated: touched.length,
-      items: touched
+      items: touched,
+      exif: exifResults.length > 0 ? { count: exifResults.length, items: exifResults } : null,
     });
   } catch (err) {
     logger.error({ err }, 'Upload failed');
@@ -2061,6 +2116,280 @@ ${itemsXml}
   res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.send(xml);
+});
+
+/* ──────────── GeoJSON Export ──────────── */
+router.get('/maps/geojson', (req, res) => {
+  try {
+    const hasCoords = req.query.hasCoords === '1';
+    const country = req.query.country || '';
+    const limit = Math.min(parseInt(req.query.limit || '1000', 10), 5000);
+
+    let sql = 'SELECT * FROM maps WHERE 1=1';
+    const params = [];
+
+    if (hasCoords) {
+      sql += ' AND latitude IS NOT NULL AND longitude IS NOT NULL';
+    }
+    if (country) {
+      sql += ' AND country_name = ?';
+      params.push(country);
+    }
+    sql += ' ORDER BY updated_at DESC LIMIT ?';
+    params.push(limit);
+
+    const rows = dbInstance.prepare(sql).all(...params);
+
+    const features = rows
+      .map((row) => {
+        const m = rowToMap(row);
+        if (m.latitude == null || m.longitude == null) {
+          // If no lat/lng, try to use bounding box centroid
+          if (row.north_latitude != null && row.south_latitude != null &&
+              row.east_longitude != null && row.west_longitude != null) {
+            m.latitude = (row.north_latitude + row.south_latitude) / 2;
+            m.longitude = (row.east_longitude + row.west_longitude) / 2;
+          } else {
+            return null;
+          }
+        }
+
+        const properties = {
+          id: m.id,
+          title: m.title || m.filename,
+          description: m.description || '',
+          country_name: m.country_name || '',
+          country_code: m.country_code || '',
+          province: m.province || '',
+          city: m.city || '',
+          year_label: m.year_label || '',
+          tags: m.tags || [],
+          scope_level: m.scope_level || '',
+          collection_unit: m.collection_unit || '',
+          storage_band: m.storage_band || '',
+          security_level: m.security_level || '',
+          file_size: m.file_size || 0,
+        };
+
+        return {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(m.longitude), parseFloat(m.latitude)],
+          },
+          properties,
+        };
+      })
+      .filter(Boolean);
+
+    const geojson = {
+      type: 'FeatureCollection',
+      features,
+    };
+
+    res.setHeader('Content-Type', 'application/geo+json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="roamly-export-${Date.now()}.geojson"`);
+    res.json(geojson);
+  } catch (err) {
+    logger.error({ err }, 'GeoJSON export failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ──────────── GeoJSON Import ──────────── */
+router.post('/maps/geojson/import', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    const geojson = req.body;
+
+    if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) {
+      res.status(400).json({ error: 'invalid_geojson', message: 'Expected GeoJSON FeatureCollection' });
+      return;
+    }
+
+    const imported = [];
+    const skipped = [];
+
+    for (const feature of geojson.features) {
+      try {
+        if (!feature || feature.type !== 'Feature') {
+          skipped.push({ reason: 'not_a_feature' });
+          continue;
+        }
+
+        const props = feature.properties || {};
+        const geom = feature.geometry;
+
+        let latitude = null;
+        let longitude = null;
+
+        if (geom && geom.type === 'Point' && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+          longitude = geom.coordinates[0];
+          latitude = geom.coordinates[1];
+        }
+
+        const now = new Date().toISOString();
+        const mapRecord = {
+          id: `geojson-${Date.now()}-${imported.length}`,
+          file_path: `geojson://${props.title || 'unnamed'}`,
+          title: props.title || 'GeoJSON Import',
+          description: props.description || '',
+          country_name: props.country_name || '',
+          country_code: props.country_code || '',
+          province: props.province || '',
+          city: props.city || '',
+          year_label: props.year_label || '',
+          tags: Array.isArray(props.tags) ? JSON.stringify(props.tags) : (props.tags || ''),
+          scope_level: props.scope_level || '',
+          collection_unit: props.collection_unit || '',
+          storage_band: props.storage_band || '',
+          security_level: props.security_level || '',
+          latitude: latitude ?? props.latitude ?? null,
+          longitude: longitude ?? props.longitude ?? null,
+          file_size: props.file_size || 0,
+          mime_type: 'application/geo+json',
+          created_at: now,
+          updated_at: now,
+        };
+
+        statements.upsertMap.run(mapRecord);
+        imported.push({ id: mapRecord.id, title: mapRecord.title });
+      } catch (featErr) {
+        logger.warn({ err: featErr }, 'Failed to import GeoJSON feature');
+        skipped.push({ reason: featErr.message });
+      }
+    }
+
+    res.json({
+      ok: true,
+      imported: imported.length,
+      skipped: skipped.length,
+      items: imported,
+    });
+  } catch (err) {
+    logger.error({ err }, 'GeoJSON import failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ──────────── EXIF Re-extraction ──────────── */
+router.post('/maps/extract-exif/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const row = dbInstance.prepare('SELECT * FROM maps WHERE id = ?').get(id);
+    if (!row) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+
+    const filePath = row.file_path;
+
+    // Skip virtual/non-file records
+    if (filePath.startsWith('geojson://')) {
+      res.json({ ok: false, message: 'GeoJSON records have no EXIF' });
+      return;
+    }
+
+    const exif = await reExtractExif(filePath);
+
+    if (exif.hasExif) {
+      statements.updateMapMeta.run({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        tags: row.tags,
+        collection_unit: row.collection_unit,
+        scope_level: row.scope_level,
+        country_code: row.country_code,
+        country_name: row.country_name,
+        province: row.province,
+        related_countries: row.related_countries,
+        related_provinces: row.related_provinces,
+        city: row.city,
+        district: row.district,
+        latitude: exif.latitude,
+        longitude: exif.longitude,
+        north_latitude: row.north_latitude,
+        south_latitude: row.south_latitude,
+        east_longitude: row.east_longitude,
+        west_longitude: row.west_longitude,
+        coverage_outline: row.coverage_outline,
+        year_label: row.year_label,
+        campaign: row.campaign,
+        teaching_use: row.teaching_use,
+        teaching_note: row.teaching_note,
+        security_level: row.security_level,
+        storage_band: row.storage_band,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    res.json({ ok: true, exif });
+  } catch (err) {
+    logger.error({ err }, 'EXIF extraction failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ──────────── Batch EXIF Re-extraction ──────────── */
+router.post('/maps/extract-exif-batch', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.body?.limit || '100', 10), 500);
+
+    const rows = dbInstance.prepare(
+      'SELECT * FROM maps WHERE (latitude IS NULL OR longitude IS NULL) AND file_path NOT LIKE \'geojson://%\' LIMIT ?'
+    ).all(limit);
+
+    const results = [];
+    for (const row of rows) {
+      try {
+        const exif = await reExtractExif(row.file_path);
+        if (exif.hasExif) {
+          statements.updateMapMeta.run({
+            id: row.id,
+            title: row.title,
+            description: row.description,
+            tags: row.tags,
+            collection_unit: row.collection_unit,
+            scope_level: row.scope_level,
+            country_code: row.country_code,
+            country_name: row.country_name,
+            province: row.province,
+            related_countries: row.related_countries,
+            related_provinces: row.related_provinces,
+            city: row.city,
+            district: row.district,
+            latitude: exif.latitude,
+            longitude: exif.longitude,
+            north_latitude: row.north_latitude,
+            south_latitude: row.south_latitude,
+            east_longitude: row.east_longitude,
+            west_longitude: row.west_longitude,
+            coverage_outline: row.coverage_outline,
+            year_label: row.year_label,
+            campaign: row.campaign,
+            teaching_use: row.teaching_use,
+            teaching_note: row.teaching_note,
+            security_level: row.security_level,
+            storage_band: row.storage_band,
+            updated_at: new Date().toISOString(),
+          });
+          results.push({ id: row.id, title: row.title, latitude: exif.latitude, longitude: exif.longitude });
+        }
+      } catch (e) {
+        logger.warn({ err: e, id: row.id }, 'Batch EXIF extraction failed for row');
+      }
+    }
+
+    res.json({
+      ok: true,
+      total: rows.length,
+      extracted: results.length,
+      items: results,
+    });
+  } catch (err) {
+    logger.error({ err }, 'Batch EXIF extraction failed');
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

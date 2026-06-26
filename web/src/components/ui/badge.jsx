@@ -1,23 +1,99 @@
-import { cva } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
+import { resolveVariant } from '../../lib/variants';
 
-const badgeVariants = cva(
-  'tw-inline-flex tw-items-center tw-rounded-md tw-border tw-px-2.5 tw-py-0.5 tw-text-xs tw-font-semibold tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-[#a54b2a]/30 focus:tw-ring-offset-2',
-  {
-    variants: {
-      variant: {
-        default: 'tw-border-[#7d3421] tw-bg-[#8f3f28] tw-text-[#fbf6ea]',
-        secondary: 'tw-border-[#ccb992] tw-bg-[#f2dfad] tw-text-[#3d3118]',
-        destructive: 'tw-border-[#8e1b16] tw-bg-[#b73124] tw-text-[#fff7f0]',
-        outline: 'tw-border-[#c7b89b] tw-bg-[#fffaf0] tw-text-[#213449]'
-      }
+/** @type {const} */
+export const KUMO_BADGE_VARIANTS = {
+  variant: {
+    default: {
+      classes:
+        'tw-border-[#7d3421] tw-bg-[var(--kumo-brand)] tw-text-[var(--kumo-brand-text)]',
+      description: 'Default brand badge',
     },
-    defaultVariants: { variant: 'default' }
-  }
-);
+    secondary: {
+      classes:
+        'tw-border-[#ccb992] tw-bg-[var(--kumo-tint)] tw-text-[#3d3118]',
+      description: 'Secondary tinted badge',
+    },
+    destructive: {
+      classes:
+        'tw-border-[#8e1b16] tw-bg-[var(--kumo-danger)] tw-text-white',
+      description: 'Danger/destructive badge',
+    },
+    outline: {
+      classes:
+        'tw-border-[var(--kumo-line)] tw-bg-[var(--kumo-elevated)] tw-text-[var(--kumo-default)]',
+      description: 'Outlined badge',
+    },
+    ghost: {
+      classes:
+        'tw-border-transparent tw-bg-[var(--kumo-recessed)] tw-text-[var(--kumo-subtle)]',
+      description: 'Ghost/minimal badge',
+    },
+    success: {
+      classes:
+        'tw-border-[var(--kumo-success)] tw-bg-[var(--kumo-success)]/10 tw-text-[var(--kumo-success)]',
+      description: 'Success badge',
+    },
+    info: {
+      classes:
+        'tw-border-[var(--kumo-info)] tw-bg-[var(--kumo-info)]/10 tw-text-[var(--kumo-info)]',
+      description: 'Info badge',
+    },
+    warning: {
+      classes:
+        'tw-border-[var(--kumo-warning)] tw-bg-[var(--kumo-warning)]/10 tw-text-[#5c4318]',
+      description: 'Warning badge',
+    },
+  },
+  size: {
+    sm: { classes: 'tw-px-1.5 tw-py-0 tw-text-[10px]', description: 'Small' },
+    base: { classes: 'tw-px-2.5 tw-py-0.5 tw-text-xs', description: 'Default' },
+    lg: { classes: 'tw-px-3 tw-py-1 tw-text-sm', description: 'Large' },
+  },
+};
 
-function Badge({ className, variant, ...props }) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+export const KUMO_BADGE_DEFAULT_VARIANTS = {
+  variant: 'default',
+  size: 'base',
+};
+
+/**
+ * @param {{
+ *   variant?: keyof typeof KUMO_BADGE_VARIANTS.variant
+ *   size?: keyof typeof KUMO_BADGE_VARIANTS.size
+ * }} [props]
+ */
+export function badgeVariants({
+  variant = KUMO_BADGE_DEFAULT_VARIANTS.variant,
+  size = KUMO_BADGE_DEFAULT_VARIANTS.size,
+} = {}) {
+  return cn(
+    'tw-inline-flex tw-items-center tw-rounded-md tw-border tw-font-semibold tw-transition-colors',
+    resolveVariant(KUMO_BADGE_VARIANTS.variant, variant, KUMO_BADGE_DEFAULT_VARIANTS.variant).classes,
+    resolveVariant(KUMO_BADGE_VARIANTS.size, size, KUMO_BADGE_DEFAULT_VARIANTS.size).classes,
+  );
 }
 
-export { Badge, badgeVariants };
+/**
+ * Kumo-style Badge with extended variants.
+ *
+ * @param {{
+ *   className?: string
+ *   variant?: keyof typeof KUMO_BADGE_VARIANTS.variant
+ *   size?: keyof typeof KUMO_BADGE_VARIANTS.size
+ *   children?: React.ReactNode
+ *   [key: string]: any
+ * }} props
+ */
+function Badge({ className, variant, size, ...props }) {
+  return (
+    <div
+      data-kumo-component="Badge"
+      className={cn(badgeVariants({ variant, size }), className)}
+      {...props}
+    />
+  );
+}
+Badge.displayName = 'Badge';
+
+export { Badge };

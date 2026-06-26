@@ -1,10 +1,12 @@
 import UIKit
+import SwiftUI
 
 final class SettingsViewController: UITableViewController {
   private enum Section: Int, CaseIterable {
     case connection
     case library
     case appearance
+    case about
 
     var title: String {
       switch self {
@@ -14,6 +16,8 @@ final class SettingsViewController: UITableViewController {
         return "图库"
       case .appearance:
         return "外观"
+      case .about:
+        return "关于"
       }
     }
 
@@ -25,6 +29,8 @@ final class SettingsViewController: UITableViewController {
         return [.library]
       case .appearance:
         return [.appearance]
+      case .about:
+        return [.about]
       }
     }
   }
@@ -103,6 +109,8 @@ final class SettingsViewController: UITableViewController {
       return "控制首页卡片密度、位置摘要和缩略图缓存。"
     case .appearance:
       return nil
+    case .about:
+      return nil
     }
   }
 
@@ -132,6 +140,10 @@ final class SettingsViewController: UITableViewController {
       navigationController?.pushViewController(AITaskHistoryViewController(logStore: container.aiTaskLogStore), animated: true)
     } else if row == .ai {
       navigationController?.pushViewController(AIProviderListViewController(container: container), animated: true)
+    } else if row == .about {
+      let aboutVC = UIHostingController(rootView: RoamlyAboutView())
+      aboutVC.title = "关于"
+      navigationController?.pushViewController(aboutVC, animated: true)
     } else {
       navigationController?.pushViewController(SettingsDetailViewController(container: container, kind: row), animated: true)
     }
@@ -145,6 +157,7 @@ private final class SettingsDetailViewController: UIViewController {
     case aiHistory
     case library
     case appearance
+    case about
 
     var title: String {
       switch self {
@@ -158,6 +171,8 @@ private final class SettingsDetailViewController: UIViewController {
         return "首页显示"
       case .appearance:
         return "界面外观"
+      case .about:
+        return "关于 Roamly"
       }
     }
 
@@ -173,6 +188,8 @@ private final class SettingsDetailViewController: UIViewController {
         return "photo.on.rectangle.angled"
       case .appearance:
         return "circle.lefthalf.filled"
+      case .about:
+        return "info.circle"
       }
     }
 
@@ -188,6 +205,8 @@ private final class SettingsDetailViewController: UIViewController {
         return .systemGreen
       case .appearance:
         return .systemGray
+      case .about:
+        return .systemTeal
       }
     }
 
@@ -209,6 +228,8 @@ private final class SettingsDetailViewController: UIViewController {
         return "\(settings.thumbnailSize.title) · \(settings.showTitlesOnLibrary ? "显示位置" : "隐藏位置")"
       case .appearance:
         return settings.interfaceStyle.title
+      case .about:
+        return "v0.1 · 地图管理与研究工具"
       }
     }
   }
@@ -403,6 +424,8 @@ private final class SettingsDetailViewController: UIViewController {
         makeSegmentRow(title: "主题模式", control: interfaceStyleControl)
       ]))
       stackView.addArrangedSubview(saveButton)
+    case .about:
+      break
     }
   }
 
@@ -592,6 +615,8 @@ private final class SettingsDetailViewController: UIViewController {
       container.settings.interfaceStyle = AppSettings.InterfaceStyle.allCases[interfaceStyleControl.selectedSegmentIndex]
       applyInterfaceStyle(selection: container.settings.interfaceStyle)
       showMessage(title: "已保存", message: "界面外观设置已更新。")
+    case .about:
+      break
     }
     container.haptics.success()
   }
@@ -926,9 +951,7 @@ private final class SettingsDetailViewController: UIViewController {
   }
 
   private func showMessage(title: String, message: String) {
-    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "知道了", style: .default))
-    present(alert, animated: true)
+    SwiftUIBridge.showToast(.info, message: "\(title)：\(message)")
   }
 }
 

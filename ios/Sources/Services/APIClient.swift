@@ -192,4 +192,66 @@ final class APIClient {
       return "application/octet-stream"
     }
   }
+
+  /// Export maps as GeoJSON FeatureCollection
+  func exportGeoJSON(hasCoords: Bool = true, limit: Int = 5000) async throws -> Data {
+    var url = try makeURL(path: "/api/maps/geojson")
+    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    var items = [URLQueryItem]()
+    if hasCoords { items.append(URLQueryItem(name: "hasCoords", value: "1")) }
+    items.append(URLQueryItem(name: "limit", value: String(limit)))
+    components.queryItems = items
+    url = components.url!
+
+    let (data, response) = try await URLSession.shared.data(from: url)
+    try validate(response: response, data: data)
+    return data
+  }
+
+  /// Import GeoJSON FeatureCollection into map records
+  func importGeoJSON(_ geojsonData: Data) async throws -> [String: Any] {
+    let url = try makeURL(path: "/api/maps/geojson/import")
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = geojsonData
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    try validate(response: response, data: data)
+    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw APIError.invalidResponse
+    }
+    return json
+  }
+
+  /// Re-extract EXIF GPS coordinates for a specific map
+  func extractExif(mapId: String) async throws -> [String: Any] {
+    let url = try makeURL(path: "/api/maps/extract-exif/\(mapId)")
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    try validate(response: response, data: data)
+    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw APIError.invalidResponse
+    }
+    return json
+  }
+
+  /// Batch re-extract EXIF GPS for maps without coordinates
+  func extractExifBatch(limit: Int = 100) async throws -> [String: Any] {
+    let url = try makeURL(path: "/api/maps/extract-exif-batch")
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    let body = ["limit": limit]
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    try validate(response: response, data: data)
+    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw APIError.invalidResponse
+    }
+    return json
+  }
 }

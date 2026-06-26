@@ -1,5 +1,6 @@
 import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch';
 import DetailGlobe from '../DetailGlobe.jsx';
+import { api } from '../api.js';
 
 const STORAGE_BAND_OPTIONS = [
   { value: '', label: '未设置' },
@@ -93,6 +94,22 @@ export default function DetailPane({
               <span>OCR: {selectedMap.ocr_status || 'pending'}</span>
               <span>轮廓: {hasCoverageOutline ? `${normalizeOutlinePoints(selectedMap.coverage_outline).length} 点` : '未提取'}</span>
               <span>范围: {selectedMap.north_latitude != null && selectedMap.south_latitude != null ? `${Number(selectedMap.south_latitude).toFixed(2)}-${Number(selectedMap.north_latitude).toFixed(2)}N` : '-'}</span>
+              <span>
+                GPS: {selectedMap.latitude != null && selectedMap.longitude != null
+                  ? `${Number(selectedMap.latitude).toFixed(4)}, ${Number(selectedMap.longitude).toFixed(4)}`
+                  : <button className="tw-inline tw-text-[10px] tw-px-1.5 tw-py-0.5 tw-border tw-border-dashed tw-border-[var(--kumo-info)] tw-bg-transparent tw-text-[var(--kumo-info)] tw-rounded tw-cursor-pointer tw-shadow-none hover:tw-bg-[var(--kumo-info)]/10" onClick={async () => {
+                      try {
+                        const exif = await api.extractExif(selectedMap.id);
+                        if (exif?.exif?.hasExif) {
+                          setMessage?.('提取到 GPS: ' + exif.exif.latitude + ', ' + exif.exif.longitude);
+                          setTimeout(() => onMapUpdate?.(), 500);
+                        } else {
+                          setMessage?.('未找到 EXIF GPS 数据');
+                        }
+                      } catch (err) { setError?.(err.message); }
+                    }}>提取 EXIF</button>
+                }
+              </span>
             </div>
           </section>
 
